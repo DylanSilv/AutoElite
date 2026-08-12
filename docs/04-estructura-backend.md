@@ -68,7 +68,9 @@ apps/api/
     └── tenant-isolation.test.ts
 ```
 
-Cada módulo tiene la misma forma:
+Cada módulo tiene la misma forma. El `*.controller.ts` aparece sólo cuando hay lógica HTTP real que
+aislar —cookies, cabeceras, negociación—; en los ABM el handler es una línea que llama al service y
+vive directamente en `*.routes.ts`, porque un archivo extra que sólo reenvía no agrega claridad.
 
 ```
 modules/orders/

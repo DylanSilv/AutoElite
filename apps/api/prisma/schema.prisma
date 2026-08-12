@@ -1,0 +1,122 @@
+// Esquema de las etapas 1.1 y 1.2: tenant e identidad.
+//
+// El catálogo, los clientes y los pedidos se agregan en las etapas siguientes
+// (ver docs/03-modelo-de-datos.md). El modelo del catálogo está bloqueado a
+// propósito hasta tener las respuestas del bloque A de
+// docs/07-preguntas-para-la-pizzeria.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// Raíz del aislamiento multi-tenant. Toda tabla de negocio cuelga de acá.
+model Commerce {
+  id       Int    @id @default(autoincrement())
+  /// Identificador expuesto por la API. Las URLs no revelan volumen de negocio
+  /// ni permiten enumerar registros de otro comercio.
+  publicId String @unique @default(cuid())
+
+  name    String
+  slug    String  @unique
+  phone   String?
+  address String?
+
+  timezone String @default("America/Argentina/Buenos_Aires")
+  currency String @default("ARS")
+
+  /// Hora local a partir de la cual empieza un nuevo día operativo. Un pedido
+  /// tomado a las 00:40 pertenece al día anterior para la caja del negocio.
+  businessDayCutoff String @default("05:00")
+
+  settings Json?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users      User[]
+  apiClients ApiClient[]
+}
+
+enum UserRole {
+  PLATFORM_ADMIN
+  OWNER
+  MANAGER
+  STAFF
+}
+
+/// Identidad de una persona. Las máquinas usan ApiClient, nunca esto.
+model User {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  /// Null únicamente para PLATFORM_ADMIN, que es transversal a la plataforma.
+  commerceId Int?
+
+  /// Único a nivel plataforma, no por comercio: el login recibe solo un email y
+  /// tiene que poder resolverlo sin ambigüedad. El costo es que una misma
+  /// persona no puede tener cuentas en dos comercios con el mismo email; si
+  /// alguna vez hace falta, se agrega el comercio al formulario de login sin
+  /// migrar datos.
+  email        String @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(STAFF)
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce      Commerce?      @relation(fields: [commerceId], references: [id])
+  refreshTokens RefreshToken[]
+
+  @@index([commerceId, isActive])
+}
+
+/// Refresh tokens rotativos, guardados hasheados: robar la base no alcanza para
+/// hacerse pasar por un usuario.
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Credencial de máquina: n8n, agente de IA, futuras integraciones.
+///
+/// Separada de User a propósito. Si el agente usara la cuenta de un empleado,
+/// el historial de auditoría sería mentira y revocarle el acceso implicaría
+/// cambiarle la contraseña a una persona.
+model ApiClient {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  /// Hash de la clave. El texto plano se muestra una única vez, al crearla.
+  keyHash    String @unique
+  /// Lista de scopes, ej: ["catalog:read","orders:write"]
+  scopes     Json
+
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  commerce Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId])
+}

@@ -57,8 +57,8 @@ funcione de punta a punta.
 
 | Etapa | Contenido | Resultado observable |
 |---|---|---|
-| 1.1 | Andamiaje: monorepo, Prisma, Docker Compose, config validada, logger, manejo de errores, salud | `docker compose up` levanta API y base |
-| 1.2 | Autenticación y multi-tenant: usuarios, roles, JWT, API keys, extensión de Prisma, **tests de aislamiento** | Se puede iniciar sesión y ninguna ruta filtra datos |
+| ~~1.1~~ ✅ | Andamiaje: monorepo, Prisma, Docker Compose, config validada, logger, manejo de errores, salud | `docker compose up` levanta API y base |
+| ~~1.2~~ ✅ | Autenticación y multi-tenant: usuarios, roles, JWT, API keys, extensión de Prisma, **tests de aislamiento** | Se puede iniciar sesión y ninguna ruta filtra datos |
 | 1.3 | Catálogo: categorías, productos, variantes, modificadores, seed del menú | El menú de la pizzería está cargado y consultable |
 | 1.4 | Clientes: ABM, normalización E.164, direcciones, zonas de envío | Se puede buscar un cliente por teléfono |
 | 1.5 | Pedidos (backend): cotización, creación con idempotencia, máquina de estados, historial, listados | Se crea y se avanza un pedido completo por API |

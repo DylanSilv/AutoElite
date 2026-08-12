@@ -3,9 +3,10 @@
 Plataforma de gestión de pedidos para comercios gastronómicos, con un piloto inicial en una
 pizzería y un agente de IA sobre WhatsApp en fases posteriores.
 
-**Estado actual: fase de diseño.** Todavía no hay código de aplicación. Este repositorio contiene,
-por ahora, el análisis y las propuestas de arquitectura que hay que revisar y aprobar antes de
-empezar a implementar.
+**Estado actual: fase 1 en curso.** Las etapas 1.1 (andamiaje) y 1.2 (autenticación y aislamiento
+multi-tenant) están implementadas. El catálogo, los clientes y los pedidos vienen después; el modelo
+del catálogo está bloqueado a propósito hasta tener las respuestas del bloque A de
+[docs/07](docs/07-preguntas-para-la-pizzeria.md).
 
 ## Principio rector
 
@@ -24,9 +25,39 @@ IA es un detalle de implementación intercambiable. Ninguna regla de negocio viv
 | [06 — MVP y fases](docs/06-mvp.md) | Alcance cerrado de la fase 1, qué queda explícitamente afuera y el plan por etapas |
 | [07 — Preguntas para la pizzería](docs/07-preguntas-para-la-pizzeria.md) | Lo que hay que validar con el comercio antes de escribir determinado código |
 
+## Puesta en marcha
+
+Requiere Node 20+, pnpm y Docker (o un MySQL 8 accesible).
+
+```bash
+pnpm install
+cp .env.example .env          # completar DATABASE_URL y los secretos
+pnpm db:up                    # levanta MySQL con docker compose
+pnpm --filter @autoelite/api db:migrate
+pnpm --filter @autoelite/api db:seed
+pnpm dev                      # API en http://localhost:3000
+```
+
+El seed crea el comercio piloto y un usuario `OWNER`. La contraseña inicial se imprime en consola y
+hay que cambiarla en el primer login; en producción se exige definir `SEED_OWNER_PASSWORD`.
+
+Para los tests hace falta una base aparte y su propio `.env.test`:
+
+```bash
+pnpm --filter @autoelite/api db:test:deploy
+pnpm test
+```
+
+## Estructura
+
+```
+apps/api            Backend Express + Prisma (núcleo del producto)
+packages/shared     Tipos y esquemas Zod del contrato, compartidos con el frontend
+docs/               Análisis, arquitectura y plan por fases
+```
+
 ## Cómo seguir
 
-1. Revisar los documentos, empezando por el 01 y el 06.
-2. Responder las decisiones abiertas marcadas como **DECISIÓN PENDIENTE**.
-3. Llevar el cuestionario del documento 07 a la pizzería.
-4. Recién ahí, arrancar la implementación por etapas.
+1. Responder las decisiones abiertas del documento 01, sección 3.
+2. Llevar el bloque A del cuestionario del documento 07 a la pizzería: bloquea la etapa 1.3.
+3. Seguir con el catálogo (1.3), clientes (1.4) y pedidos (1.5).
