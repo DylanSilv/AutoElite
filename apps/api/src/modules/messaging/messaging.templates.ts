@@ -46,12 +46,21 @@ function greeting(name: string): string {
 }
 
 /**
+ * Los avisos automáticos, sin `AGENT_REPLY`: la respuesta del asistente la
+ * redacta el propio asistente en la conversación, no una plantilla.
+ */
+export type TemplatedMessageKind = Exclude<MessageKind, 'AGENT_REPLY'>;
+
+/**
  * Qué aviso corresponde a cada transición.
  *
  * Devuelve null cuando no hay nada que avisar: el cliente no necesita un
  * mensaje por cada movimiento interno de la cocina.
  */
-export function kindForTransition(status: OrderStatus, type: OrderType): MessageKind | null {
+export function kindForTransition(
+  status: OrderStatus,
+  type: OrderType,
+): TemplatedMessageKind | null {
   switch (status) {
     case 'PENDIENTE':
       return 'ORDER_RECEIVED';
@@ -72,7 +81,7 @@ export function kindForTransition(status: OrderStatus, type: OrderType): Message
   }
 }
 
-export function buildMessageBody(kind: MessageKind, ctx: MessageContext): string {
+export function buildMessageBody(kind: TemplatedMessageKind, ctx: MessageContext): string {
   const { order, commerce } = ctx;
   const total = formatMoney(order.totalCents, commerce.currency, 'es-UY');
   const hola = greeting(order.customerName);

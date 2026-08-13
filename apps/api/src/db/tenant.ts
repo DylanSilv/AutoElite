@@ -40,6 +40,9 @@ const TENANT_MODELS = new Set<string>([
   'OrderStatusHistory',
   'OutboundMessage',
   'PaymentProof',
+  'Promotion',
+  'Conversation',
+  'ConversationMessage',
 ]);
 
 /** Operaciones cuyo `where` acota qué filas se leen o se tocan. */

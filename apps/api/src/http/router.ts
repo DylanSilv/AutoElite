@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { agentRouter } from '../modules/agent/agent.routes.js';
 import { apiClientsRouter } from '../modules/api-clients/api-clients.routes.js';
 import { authRouter } from '../modules/auth/auth.routes.js';
 import {
@@ -10,6 +11,7 @@ import { commercesRouter } from '../modules/commerces/commerces.routes.js';
 import { deliveryZonesRouter, paymentMethodsRouter } from '../modules/config/config.routes.js';
 import { customersRouter } from '../modules/customers/customers.routes.js';
 import { ordersRouter } from '../modules/orders/orders.routes.js';
+import { promotionsRouter } from '../modules/promotions/promotions.routes.js';
 import { reportsRouter } from '../modules/reports/reports.routes.js';
 import { usersRouter } from '../modules/users/users.routes.js';
 import { authenticate } from './middlewares/authenticate.js';
@@ -34,9 +36,12 @@ apiRouter.use('/categories', categoriesRouter);
 apiRouter.use('/products', productsRouter);
 apiRouter.use('/modifier-groups', modifierGroupsRouter);
 
+apiRouter.use('/promotions', promotionsRouter);
+
 apiRouter.use('/customers', customersRouter);
 apiRouter.use('/delivery-zones', deliveryZonesRouter);
 apiRouter.use('/payment-methods', paymentMethodsRouter);
 
 apiRouter.use('/orders', ordersRouter);
 apiRouter.use('/reports', reportsRouter);
+apiRouter.use('/agent', agentRouter);

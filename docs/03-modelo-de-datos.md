@@ -137,6 +137,28 @@ las métricas de tiempos de preparación más adelante, sin cambiar el esquema.
 Tabla auxiliar `(commerceId, businessDate) → lastNumber` para generar el correlativo diario bajo
 bloqueo transaccional.
 
+### Promotion
+
+Promociones vigentes, con vigencia opcional y días de la semana en los que aplican. A propósito **no
+calcula descuentos**: es el texto que el comercio escribe y el asistente transmite. Un motor de
+reglas de descuento es un producto en sí mismo, y arrancar por ahí garantizaría promociones que la
+pizzería no puede cargar sola. Cuando el descuento se aplique de verdad, el importe sigue saliendo de
+`Order.discountCents`, que ya existe.
+
+### Conversation / ConversationMessage
+
+El hilo con un cliente, uno por teléfono y canal. Guarda quién atiende (`status`: el asistente o una
+persona), por qué dejó de atender el asistente (`handoffReason`) y el **pedido a medio armar**
+(`draft`).
+
+El borrador vive acá y no en la memoria del proceso por tres razones: una charla por WhatsApp se
+retoma horas después, la respuesta puede llegar contra otra instancia de la API, y el personal tiene
+que poder ver qué está pidiendo alguien antes de que termine de decidirse.
+
+`ConversationMessage` guarda además los resultados de las herramientas que ejecutó el asistente
+(`toolName`, `toolArgs`, `toolResult`). Es la trazabilidad de dónde salió cada dato que se le dijo a
+un cliente: sin eso, un reclamo por un precio mal informado no se puede reconstruir.
+
 ## 4. Máquina de estados
 
 ```mermaid
@@ -609,14 +631,15 @@ función; nunca calculan su propia versión.
 
 ## 7. Lo que el esquema deja preparado sin construir
 
-| Fase | Tablas que se agregarán | Cambios sobre lo existente |
+| Fase | Tablas | Cambios sobre lo existente |
 |---|---|---|
-| 2 — WhatsApp / agente | `Conversation`, `ConversationMessage`, `AgentConfig`, `IntegrationCredential` | Ninguno: `Order.source` y `createdByApiClientId` ya existen |
-| 3 — IA avanzada | `MediaAsset` (audios y transcripciones), `HandoffRequest` | Ninguno |
+| 2 — WhatsApp / agente | `Conversation`, `ConversationMessage`, `OutboundMessage`, `PaymentProof`, `Promotion` — **ya construidas** | Ninguno sobre pedidos: `Order.source` y `createdByApiClientId` ya existían. Se sumó `Commerce.whatsappPhoneNumberId` |
+| 3 — IA avanzada | `MediaAsset` (audios y transcripciones) | Ninguno: la derivación a una persona ya está en `Conversation.status` |
 | 4 — Telefonía | `Call`, reutilizando `Conversation` | Un valor nuevo en el enum `OrderSource` |
-| Promociones | `Promotion`, `OrderDiscount` | `Order.discountCents` ya existe como total agregado |
+| Descuentos calculados | `OrderDiscount` | `Order.discountCents` ya existe como total agregado |
 
-Ninguna de estas fases requiere migrar datos de pedidos existentes, que es el objetivo del diseño.
+La predicción se cumplió: la fase 2 se construyó **sin migrar un solo pedido existente**, que era el
+objetivo del diseño.
 
 ## 8. Puntos abiertos del modelo
 

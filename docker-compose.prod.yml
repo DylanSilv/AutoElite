@@ -48,6 +48,18 @@ services:
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v21.0}
+      # Webhook entrante: sin el secreto de la app, la API rechaza las entregas
+      # en producción antes que aceptar mensajes de origen desconocido.
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      # Asistente conversacional. "scripted" no necesita credenciales.
+      LLM_PROVIDER: ${LLM_PROVIDER:-scripted}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1024}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-20000}
+      AGENT_MAX_TOOL_ROUNDS: ${AGENT_MAX_TOOL_ROUNDS:-4}
     # Las migraciones se aplican como paso explícito del arranque, no desde el
     # código: así un despliegue que falle no deja la base a medio migrar.
     command: >

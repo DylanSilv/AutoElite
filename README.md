@@ -26,6 +26,7 @@ IA es un detalle de implementación intercambiable. Ninguna regla de negocio viv
 | [05 — Estructura del frontend](docs/05-estructura-frontend.md) | Organización por features, pantallas del MVP y manejo de estado |
 | [06 — MVP y fases](docs/06-mvp.md) | Alcance cerrado de la fase 1, qué queda explícitamente afuera y el plan por etapas |
 | [07 — Preguntas para la pizzería](docs/07-preguntas-para-la-pizzeria.md) | Lo que hay que validar con el comercio antes de escribir determinado código |
+| [08 — Asistente de WhatsApp](docs/08-asistente-whatsapp.md) | Cómo funciona el asistente, qué puede y qué no puede hacer, y cómo enchufarlo a un número real |
 
 ## Funcionalidad
 
@@ -37,8 +38,9 @@ IA es un detalle de implementación intercambiable. Ninguna regla de negocio viv
 | **Clientes** | Ficha con direcciones, cantidad de pedidos y total gastado, alimentada sola |
 | **Historial** | Filtros por estado, modalidad y texto |
 | **Dashboard** | Ventas, cantidad de pedidos, ticket promedio, más vendidos y distribución por modalidad y pago |
-| **Configuración** | Comercio, zonas de envío, métodos de pago y usuarios |
+| **Configuración** | Comercio, zonas de envío, métodos de pago, promociones y usuarios |
 | **Avisos por WhatsApp** | Mensajes automáticos al cliente cuando el pedido se confirma, está listo para retirar o sale a la calle |
+| **Asistente de WhatsApp** | Atiende solo: pasa la carta, cuenta las promos, arma el pedido, cobra por adelantado y deriva a una persona cuando hace falta |
 
 ### Avisos automáticos al cliente
 
@@ -65,6 +67,34 @@ Una limitación que impone WhatsApp, no el sistema: sólo se puede escribir libr
 de las **24 horas** posteriores a su último mensaje. Fuera de esa ventana hace falta una plantilla
 aprobada por Meta. El aviso queda marcado como "no enviado" con el motivo a la vista, para que el
 personal sepa que a ese cliente hay que llamarlo.
+
+### El asistente que atiende el WhatsApp
+
+El número del negocio contesta solo. Pasa la carta con precios reales, cuenta las promociones
+vigentes, arma el pedido, pide la dirección y el barrio, cobra por adelantado cuando el medio lo
+exige, y recibe la captura del comprobante para que alguien la verifique.
+
+Lo que **no** puede hacer, por construcción y no por buena voluntad del modelo:
+
+- inventar un precio, una promoción o una demora: todo sale de la base en el momento;
+- confirmar un pago: registra el comprobante, pero marcarlo como pago es de una persona;
+- prometer un envío a un barrio al que no se reparte, ni cobrar envío $0 por no reconocer la
+  dirección;
+- cancelar un pedido: eso lo mira alguien del local.
+
+Ante un reclamo, un pedido de cancelación o cualquier cosa que no pueda resolver, **deriva a una
+persona y deja de contestar**. La conversación aparece en el panel bajo "Necesitan a alguien", con el
+motivo, y un botón la devuelve al asistente cuando el tema se resolvió.
+
+**Se puede probar sin WhatsApp.** En **Asistente → Probar el asistente** se le escribe como si fueras
+un cliente; usa el mismo endpoint que WhatsApp, así que lo que se ve ahí es lo que va a pasar de
+verdad. Y **no necesita ninguna cuenta de IA**: el proveedor por defecto es un asistente por reglas
+que funciona sin credenciales. Para usar un modelo de lenguaje alcanza con `LLM_PROVIDER=anthropic`
+(u `openai`) más la clave y el modelo; si ese proveedor se cae, el de reglas responde en su lugar y
+el negocio sigue tomando pedidos.
+
+Los detalles —herramientas disponibles, cómo conectar un número real, la ventana de 24 horas— están
+en [docs/08](docs/08-asistente-whatsapp.md).
 
 ## Puesta en marcha (desarrollo)
 
@@ -140,8 +170,9 @@ docs/               Análisis, arquitectura y plan por fases
 
 ## Datos de demostración
 
-El menú, los clientes y el historial son ficticios pero con la forma del negocio real. Cuando la
-pizzería se sume, se reemplazan por los suyos: el seed limpia y recarga sólo los datos operativos.
+El menú, los clientes, las promociones, el historial y dos conversaciones de WhatsApp son ficticios
+pero con la forma del negocio real. Cuando la pizzería se sume, se reemplazan por los suyos: el seed
+limpia y recarga sólo los datos operativos.
 
 Hay una decisión de modelo que quedó abierta a propósito y conviene cerrar antes de cargar datos
 reales: **la pizza mitad y mitad**. Está en el bloque A de

@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 
 const NAV = [
   { to: '/', label: 'Pedidos', icon: '📋', end: true },
+  { to: '/asistente', label: 'Asistente', icon: '💬' },
   { to: '/historial', label: 'Historial', icon: '🗂️' },
   { to: '/menu', label: 'Menú', icon: '🍕' },
   { to: '/clientes', label: 'Clientes', icon: '👥' },

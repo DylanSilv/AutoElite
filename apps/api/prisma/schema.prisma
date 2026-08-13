@@ -36,6 +36,13 @@ model Commerce {
   /// tomado a las 00:40 pertenece al día anterior para la caja del negocio.
   businessDayCutoff String @default("05:00")
 
+  /// Identificador del número de WhatsApp del comercio en la API de Meta.
+  ///
+  /// Es lo único que trae el webhook para saber a qué comercio pertenece un
+  /// mensaje entrante: Meta manda todos los eventos de una app al mismo
+  /// endpoint, sin ningún dato nuestro.
+  whatsappPhoneNumberId String? @unique
+
   settings Json?
   isActive Boolean @default(true)
 
@@ -51,6 +58,8 @@ model Commerce {
   deliveryZones  DeliveryZone[]
   paymentMethods PaymentMethod[]
   orders         Order[]
+  promotions     Promotion[]
+  conversations  Conversation[]
 }
 
 enum UserRole {
@@ -579,6 +588,8 @@ model OrderStatusHistory {
 // ---------------------------------------------------------------------------
 
 enum MessageKind {
+  /// Respuesta del asistente dentro de una conversación.
+  AGENT_REPLY
   ORDER_RECEIVED
   PAYMENT_REQUESTED
   PAYMENT_CONFIRMED
@@ -674,4 +685,135 @@ model OrderCounter {
   lastNumber   Int      @default(0)
 
   @@id([commerceId, businessDate])
+}
+
+// ---------------------------------------------------------------------------
+// Promociones
+// ---------------------------------------------------------------------------
+
+/// Promoción vigente, tal como se le cuenta al cliente.
+///
+/// A propósito NO calcula descuentos: es texto que el comercio escribe y el
+/// asistente transmite. Un motor de reglas de descuento es un producto en sí
+/// mismo, y arrancar por ahí garantizaría promociones que la pizzería no puede
+/// cargar sola. Cuando el descuento se aplique de verdad, el importe sigue
+/// saliendo de `discountCents` del pedido, que ya existe.
+model Promotion {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId  Int
+  title       String
+  description String @db.Text
+
+  /// Vigencia opcional. Sin fechas, la promoción vale mientras esté activa.
+  startsAt DateTime?
+  endsAt   DateTime?
+  /// Días de la semana en los que aplica, como lista de números (0 = domingo).
+  /// Vacío o nulo significa todos los días: los 2x1 suelen ser de un día fijo.
+  weekdays Json?
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId, isActive, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Conversaciones del asistente
+// ---------------------------------------------------------------------------
+
+enum ConversationChannel {
+  WHATSAPP
+  /// Simulador del panel: sirve para probar y mostrar el asistente sin gastar
+  /// conversaciones de WhatsApp ni necesitar credenciales de Meta.
+  SIMULATOR
+}
+
+enum ConversationStatus {
+  /// El asistente responde solo.
+  BOT
+  /// Derivada a una persona: el asistente deja de contestar.
+  HUMAN
+  CLOSED
+}
+
+enum ConversationRole {
+  CUSTOMER
+  ASSISTANT
+  /// Resultado de una herramienta. Se guarda para poder auditar de dónde salió
+  /// cada dato que el asistente le dijo al cliente.
+  TOOL
+  /// Mensaje escrito por el personal desde el panel.
+  STAFF
+}
+
+/// Hilo con un cliente. Uno por teléfono y canal.
+model Conversation {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  channel    ConversationChannel @default(WHATSAPP)
+  phoneE164  String
+  customerId Int?
+
+  contactName String?
+  status      ConversationStatus @default(BOT)
+  /// Por qué dejó de contestar el asistente. Lo lee el personal en el panel.
+  handoffReason String?
+
+  /// Pedido a medio armar: lo que el cliente eligió pero todavía no confirmó.
+  ///
+  /// Vive acá y no en la memoria del proceso porque una conversación por
+  /// WhatsApp se retoma horas después, desde otra instancia de la API, y porque
+  /// el personal tiene que poder ver qué está pidiendo alguien antes de que
+  /// termine.
+  draft Json?
+
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  commerce Commerce              @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  messages ConversationMessage[]
+
+  @@unique([commerceId, channel, phoneE164])
+  @@index([commerceId, lastMessageAt])
+}
+
+model ConversationMessage {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId     Int
+  conversationId Int
+
+  role ConversationRole
+  body String           @db.Text
+
+  /// Herramienta invocada y su resultado, cuando el turno fue una consulta a la
+  /// API en vez de texto para el cliente.
+  toolName   String?
+  toolArgs   Json?
+  toolResult Json?
+
+  /// Imagen adjunta por el cliente (típicamente el comprobante de pago).
+  mediaId   String?
+  mediaType String?
+
+  /// Identificador del mensaje en el proveedor, para conciliar con WhatsApp.
+  providerMessageId String? @unique
+
+  createdAt DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, id])
+  @@index([commerceId, createdAt])
 }

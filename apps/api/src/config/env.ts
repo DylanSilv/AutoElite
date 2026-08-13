@@ -22,6 +22,16 @@ for (const candidate of envCandidates) {
   }
 }
 
+/**
+ * Variable opcional que puede llegar vacía.
+ *
+ * docker-compose expande `${VAR:-}` a cadena vacía cuando la variable no está
+ * definida, y una cadena vacía no es "sin valor" para Zod: sin esto, un
+ * despliegue sin credenciales de IA no levantaría por una URL vacía.
+ */
+const optional = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -54,11 +64,28 @@ const envSchema = z.object({
   // mensaje en la consola: alcanza para probar todo el flujo sin una cuenta de
   // Meta ni gastar conversaciones.
   WHATSAPP_PROVIDER: z.enum(['log', 'cloud']).default('log'),
-  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
-  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: optional(z.string()),
+  WHATSAPP_ACCESS_TOKEN: optional(z.string()),
   WHATSAPP_API_VERSION: z.string().default('v21.0'),
   /** Cada cuánto se vacía la cola de mensajes pendientes. */
   MESSAGING_DISPATCH_INTERVAL_MS: z.coerce.number().int().min(1000).max(600_000).default(10_000),
+
+  // Webhook entrante de WhatsApp. Meta exige un token para el alta y firma cada
+  // entrega con el secreto de la app.
+  WHATSAPP_VERIFY_TOKEN: optional(z.string()),
+  WHATSAPP_APP_SECRET: optional(z.string()),
+
+  // Asistente conversacional. "scripted" no necesita credenciales ni red: el
+  // flujo completo se puede probar y mostrar sin contratar ningún proveedor.
+  LLM_PROVIDER: z.enum(['scripted', 'anthropic', 'openai']).default('scripted'),
+  LLM_API_KEY: optional(z.string()),
+  /** Sin valor por defecto a propósito: el modelo lo elige quien despliega. */
+  LLM_MODEL: optional(z.string()),
+  LLM_BASE_URL: optional(z.string().url()),
+  LLM_MAX_TOKENS: z.coerce.number().int().min(256).max(8192).default(1024),
+  LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(20_000),
+  /** Techo de vueltas modelo→herramienta en un mismo mensaje. */
+  AGENT_MAX_TOOL_ROUNDS: z.coerce.number().int().min(1).max(10).default(4),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -79,5 +106,15 @@ export const isTest = env.NODE_ENV === 'test';
 
 if (isProduction && env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
   console.error('JWT_ACCESS_SECRET y JWT_REFRESH_SECRET no pueden ser iguales en producción.');
+  process.exit(1);
+}
+
+// Elegir un proveedor de IA sin credencial ni modelo dejaría al asistente
+// mudo recién cuando escriba el primer cliente. Mejor no levantar.
+if (env.LLM_PROVIDER !== 'scripted' && (!env.LLM_API_KEY || !env.LLM_MODEL)) {
+  console.error(
+    `LLM_PROVIDER=${env.LLM_PROVIDER} requiere LLM_API_KEY y LLM_MODEL. ` +
+      'Sin eso, usá LLM_PROVIDER=scripted.',
+  );
   process.exit(1);
 }

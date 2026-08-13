@@ -7,3 +7,5 @@ export * from './commerces.js';
 export * from './catalog.js';
 export * from './customers.js';
 export * from './orders.js';
+export * from './promotions.js';
+export * from './agent.js';

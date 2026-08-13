@@ -143,6 +143,31 @@ const DELIVERY_ZONES = [
   { name: 'Malvín', feeCents: p(200), estimatedMin: 40 },
 ];
 
+/**
+ * Promociones de ejemplo.
+ *
+ * Son texto, no reglas de descuento: es lo que el asistente le cuenta al
+ * cliente y lo que el comercio puede editar solo desde el panel.
+ */
+const PROMOTIONS = [
+  {
+    title: 'Martes de muzza 2x1',
+    description: 'Todos los martes, llevás dos pizzas de muzzarella grandes al precio de una.',
+    weekdays: [2],
+  },
+  {
+    title: 'Combo familiar',
+    description:
+      'Pizza grande + fainá entera + 2 litros de refresco. Pedilo por acá y te lo armamos.',
+    weekdays: [],
+  },
+  {
+    title: 'Envío bonificado en Centro y Cordón',
+    description: 'De domingo a jueves, pedidos de más de $1.200 en Centro y Cordón van sin costo de envío.',
+    weekdays: [0, 1, 2, 3, 4],
+  },
+];
+
 const PAYMENT_METHODS = [
   {
     name: 'Efectivo',
@@ -284,6 +309,8 @@ async function main(): Promise<void> {
   await prisma.category.deleteMany({ where: { commerceId: commerce.id } });
   await prisma.deliveryZone.deleteMany({ where: { commerceId: commerce.id } });
   await prisma.paymentMethod.deleteMany({ where: { commerceId: commerce.id } });
+  await prisma.promotion.deleteMany({ where: { commerceId: commerce.id } });
+  await prisma.conversation.deleteMany({ where: { commerceId: commerce.id } });
 
   // ---------- Equipo ----------
 
@@ -322,6 +349,14 @@ async function main(): Promise<void> {
     PAYMENT_METHODS.map((method, index) =>
       prisma.paymentMethod.create({
         data: { ...method, commerceId: commerce.id, sortOrder: index },
+      }),
+    ),
+  );
+
+  await Promise.all(
+    PROMOTIONS.map((promotion, index) =>
+      prisma.promotion.create({
+        data: { ...promotion, commerceId: commerce.id, sortOrder: index },
       }),
     ),
   );
@@ -702,6 +737,53 @@ async function main(): Promise<void> {
     }
   }
 
+  // ---------- Conversaciones de WhatsApp ----------
+  //
+  // Dos hilos que muestran el asistente en las dos situaciones que importan:
+  // una charla que terminó en un pedido esperando pago, y una que el asistente
+  // derivó a una persona en vez de improvisar.
+
+  await seedConversation({
+    commerceId: commerce.id,
+    customer: customers[0]!,
+    status: 'BOT',
+    minutesAgo: 6,
+    messages: [
+      ['CUSTOMER', 'Hola! tenés muzza grande?'],
+      [
+        'ASSISTANT',
+        '¡Hola! 👋 Sí, tenemos. La muzzarella grande (8 porciones) está $650.\n\n¿Te la armo? Decime si es para envío o para retirar.',
+      ],
+      ['CUSTOMER', 'dale, una grande para retirar'],
+      [
+        'ASSISTANT',
+        'Te va quedando así:\n• 1x Muzzarella (Grande (8 porciones)) — $650\n*Total: $650*\n\n¿Cómo lo vas a pagar?',
+      ],
+      ['CUSTOMER', 'transferencia'],
+      [
+        'ASSISTANT',
+        'Te va quedando así:\n• 1x Muzzarella (Grande (8 porciones)) — $650\n*Total: $650*\n\n¿Confirmo el pedido?',
+      ],
+      ['CUSTOMER', 'si'],
+      [
+        'ASSISTANT',
+        '¡Listo! Tu pedido es el *#42* por $650.\n\nPara ponerlo en marcha necesitamos el pago por adelantado.\n\nTransferí a:\nBROU · Caja de ahorro 001234567-00001\nTitular: La Napolitana SRL\n\nCuando pagues, mandame la captura del comprobante por acá y lo mandamos a la cocina 👍',
+      ],
+    ],
+  });
+
+  await seedConversation({
+    commerceId: commerce.id,
+    customer: customers[3]!,
+    status: 'HUMAN',
+    handoffReason: 'El cliente pidió hablar con una persona',
+    minutesAgo: 25,
+    messages: [
+      ['CUSTOMER', 'buenas, el pedido de ayer llegó frío'],
+      ['ASSISTANT', 'Te paso con alguien del local, en un ratito te responden 🙌'],
+    ],
+  });
+
   // El contador tiene que quedar donde lo dejó el seed: si no, el primer pedido
   // que cargue el usuario chocaría con un número ya usado.
   for (const [businessDate, lastNumber] of counters) {
@@ -736,6 +818,46 @@ async function main(): Promise<void> {
   console.log(`Menú: ${allVariants.length} variantes en ${MENU.length} categorías`);
   console.log(`Clientes: ${customers.length} · Pedidos: ${totalOrders}`);
   console.log(`Acceso: ${email} / ${password}`);
+}
+
+/** Deja un hilo de WhatsApp ya conversado, para poder mostrarlo sin escribirlo. */
+async function seedConversation(input: {
+  commerceId: number;
+  customer: { id: number; name: string; phoneE164: string };
+  status: 'BOT' | 'HUMAN';
+  handoffReason?: string;
+  minutesAgo: number;
+  messages: ['CUSTOMER' | 'ASSISTANT', string][];
+}): Promise<void> {
+  const start = new Date(Date.now() - input.minutesAgo * 60 * 1000);
+  const lastMessageAt = new Date(start.getTime() + input.messages.length * 40 * 1000);
+
+  const conversation = await prisma.conversation.create({
+    data: {
+      commerceId: input.commerceId,
+      channel: 'WHATSAPP',
+      phoneE164: input.customer.phoneE164,
+      customerId: input.customer.id,
+      contactName: input.customer.name,
+      status: input.status,
+      handoffReason: input.handoffReason ?? null,
+      lastMessageAt,
+    },
+  });
+
+  for (const [index, [role, body]] of input.messages.entries()) {
+    await prisma.conversationMessage.create({
+      data: {
+        commerceId: input.commerceId,
+        conversationId: conversation.id,
+        role,
+        body,
+        // Separados en el tiempo para que el hilo se lea como una charla y no
+        // como ocho mensajes escritos en el mismo segundo.
+        createdAt: new Date(start.getTime() + index * 40 * 1000),
+      },
+    });
+  }
 }
 
 main()

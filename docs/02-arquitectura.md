@@ -78,10 +78,28 @@ condiciones de negocio, eso es una señal de que falta un endpoint en la API.
 Si la organización decide más adelante que n8n no le sirve, se reemplaza por un controlador de
 webhooks en el propio backend sin tocar nada más.
 
-### 3.4 Servicio de agente (fase 2)
+### 3.4 Servicio de agente — **implementado**
+
+> Construido en `apps/api/src/modules/agent/`. El detalle completo —herramientas, límites, cómo
+> conectar un número real— está en [08 — Asistente de WhatsApp](08-asistente-whatsapp.md).
 
 Traduce entre lenguaje natural y llamadas a la API. Responsabilidades: mantener el estado de la
 conversación, decidir qué herramienta invocar, ejecutarla contra la API y redactar la respuesta.
+
+Lo que se construyó respeta las dos definiciones de abajo, con tres agregados que la práctica
+mostró necesarios:
+
+- **Un proveedor por reglas (`scripted`) como opción por defecto.** No necesita credenciales ni red.
+  Sirve para tres cosas distintas: mostrar el producto sin contratar nada, probar el runtime de
+  forma determinista, y responder cuando el proveedor de IA se cae. La fábrica envuelve al proveedor
+  remoto con este como respaldo automático.
+- **El pedido a medio armar viaja aparte del historial.** Vive en la conversación (columna `draft`)
+  y se le pasa al modelo como estado estructurado. El historial que ve el modelo es sólo lo que vio
+  el cliente: los resultados de herramientas viejos son datos vencidos y volver a mostrárselos lo
+  llevaría a repetirlos como si valieran.
+- **El reconocimiento de lo que pide el cliente ("una muza grande") es código nuestro**, no del
+  modelo. Así el precio y la disponibilidad siempre salen de la base, y el mismo reconocimiento
+  funciona con cualquier proveedor o sin ninguno.
 
 Dos definiciones que evitan el acoplamiento:
 
@@ -97,8 +115,10 @@ interface LlmProvider {
 }
 ```
 
-- Las implementaciones (`GeminiProvider`, `OpenAiProvider`, `AnthropicProvider`) se eligen por
-  configuración. El resto del sistema solo conoce la interfaz.
+- Las implementaciones (`ScriptedLlmProvider`, `AnthropicLlmProvider`, `OpenAiLlmProvider`) se eligen
+  por configuración (`LLM_PROVIDER`). El resto del sistema solo conoce la interfaz. `LLM_BASE_URL`
+  alcanza para apuntar el proveedor "openai" a cualquier servicio compatible, incluido un modelo
+  corriendo en una máquina propia.
 - Las herramientas se definen **una sola vez** como envoltorios tipados sobre endpoints de la API, y
   cada proveedor las traduce a su formato. No se reescriben por proveedor.
 - **El estado de la conversación se persiste en nuestra base de datos**, no en n8n ni en el proveedor

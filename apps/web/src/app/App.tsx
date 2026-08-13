@@ -3,6 +3,7 @@ import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Spinner } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { AssistantPage } from '@/pages/AssistantPage';
 import { BoardPage } from '@/pages/BoardPage';
 import { CustomersPage } from '@/pages/CustomersPage';
 import { HistoryPage } from '@/pages/HistoryPage';
@@ -49,6 +50,7 @@ function ProtectedRoutes() {
       <Route element={<AppLayout />}>
         <Route index element={<BoardPage />} />
         <Route path="pedidos/nuevo" element={<NewOrderPage />} />
+        <Route path="asistente" element={<AssistantPage />} />
         <Route path="historial" element={<HistoryPage />} />
         <Route path="menu" element={<ProductsPage />} />
         <Route path="clientes" element={<CustomersPage />} />

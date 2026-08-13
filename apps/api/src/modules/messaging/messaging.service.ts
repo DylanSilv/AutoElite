@@ -1,9 +1,13 @@
-import { type MessageKind, type Order, type PaymentMethod, Prisma } from '@prisma/client';
+import { type Order, type PaymentMethod, Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma.js';
 import type { TenantContext } from '../../http/context.js';
 import { logger } from '../../shared/logger.js';
 import { getMessagingProvider, PermanentSendError } from './messaging.provider.js';
-import { buildMessageBody, kindForTransition } from './messaging.templates.js';
+import {
+  buildMessageBody,
+  kindForTransition,
+  type TemplatedMessageKind,
+} from './messaging.templates.js';
 
 /**
  * Cola de avisos automáticos al cliente.
@@ -26,7 +30,11 @@ const MAX_ATTEMPTS = 4;
 
 interface EnqueueInput {
   order: Order;
-  kind: MessageKind;
+  /**
+   * Los avisos automáticos tienen plantilla. La respuesta del asistente
+   * (`AGENT_REPLY`) no pasa por acá: la redacta él y la encola directo.
+   */
+  kind: TemplatedMessageKind;
   /** Necesario para el aviso de cobro: lleva alias, cuenta y QR. */
   paymentMethod?: PaymentMethod | null;
 }

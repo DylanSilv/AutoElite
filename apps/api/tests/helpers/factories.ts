@@ -14,6 +14,9 @@ function unique(prefix: string): string {
 
 /** Deja la base vacía respetando el orden de las claves foráneas. */
 export async function resetDatabase(): Promise<void> {
+  await prisma.conversationMessage.deleteMany();
+  await prisma.conversation.deleteMany();
+  await prisma.promotion.deleteMany();
   await prisma.outboundMessage.deleteMany();
   await prisma.paymentProof.deleteMany();
   await prisma.orderItemModifier.deleteMany();
