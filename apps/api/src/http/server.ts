@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import { disconnectPrisma, prisma } from '../db/prisma.js';
 import { logger } from '../shared/logger.js';
+import { startMessagingDispatcher, stopMessagingDispatcher } from '../modules/messaging/messaging.dispatcher.js';
 import { createApp } from './app.js';
 
 const app = createApp();
@@ -8,6 +9,7 @@ const app = createApp();
 const server = app.listen(env.PORT, () => {
   logger.info(`API escuchando en http://localhost:${env.PORT} (${env.NODE_ENV})`);
   void checkDatabase();
+  startMessagingDispatcher();
 });
 
 /**
@@ -44,6 +46,8 @@ async function shutdown(signal: string): Promise<void> {
     process.exit(1);
   }, 10_000);
   forced.unref();
+
+  stopMessagingDispatcher();
 
   server.close(async (err) => {
     if (err) logger.error({ err }, 'Error al cerrar el servidor HTTP');

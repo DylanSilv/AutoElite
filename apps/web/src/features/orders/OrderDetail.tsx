@@ -1,9 +1,23 @@
-import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, type OrderStatus } from '@autoelite/shared';
+import {
+  MESSAGE_STATUS_LABELS,
+  ORDER_STATUS_LABELS,
+  ORDER_TYPE_LABELS,
+  type MessageStatus,
+  type OrderStatus,
+} from '@autoelite/shared';
 import { useState } from 'react';
 import { Badge, Button, Card, ErrorMessage, Input, Spinner } from '@/components/ui';
 import { dateTime, money, time } from '@/lib/format';
 import { useCancelOrder, useChangeStatus, useOrder } from './orders.api';
 import { STATUS_TONE, TRANSITION_LABEL, TYPE_ICON } from './order-visuals';
+
+/** El estado del aviso se lee de un vistazo: verde llegó, ámbar no salió. */
+const NOTIFICATION_TONE: Record<MessageStatus, 'slate' | 'emerald' | 'red' | 'amber'> = {
+  PENDING: 'slate',
+  SENT: 'emerald',
+  FAILED: 'red',
+  SKIPPED: 'amber',
+};
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -171,6 +185,32 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               </div>
             </div>
           )}
+        </Card>
+      )}
+
+      {order.notifications.length > 0 && (
+        <Card className="p-4">
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">Avisos al cliente</h3>
+          <ul className="space-y-2">
+            {order.notifications.map((notification, index) => (
+              <li key={index} className="rounded-lg bg-slate-50 p-2.5">
+                <div className="mb-1 flex items-center gap-2">
+                  <Badge tone={NOTIFICATION_TONE[notification.status]}>
+                    {MESSAGE_STATUS_LABELS[notification.status]}
+                  </Badge>
+                  <span className="text-xs text-slate-400">
+                    {time(notification.sentAt ?? notification.createdAt)}
+                  </span>
+                </div>
+                <p className="whitespace-pre-line text-xs text-slate-600">{notification.body}</p>
+                {notification.skipReason && (
+                  // Si el aviso no salió, alguien va a tener que llamar: el
+                  // motivo tiene que estar a la vista, no escondido en un log.
+                  <p className="mt-1 text-xs text-amber-700">{notification.skipReason}</p>
+                )}
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

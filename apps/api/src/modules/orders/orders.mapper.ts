@@ -9,6 +9,7 @@ import type {
   OrderItem,
   OrderItemModifier,
   OrderStatusHistory,
+  OutboundMessage,
 } from '@prisma/client';
 import { formatDateColumn } from '../../shared/business-date.js';
 
@@ -16,7 +17,10 @@ type OrderWithItems = Order & {
   items: (OrderItem & { modifiers: OrderItemModifier[] })[];
 };
 
-type OrderFull = OrderWithItems & { statusHistory: OrderStatusHistory[] };
+type OrderFull = OrderWithItems & {
+  statusHistory: OrderStatusHistory[];
+  notifications?: OutboundMessage[];
+};
 
 export const orderListInclude = {
   items: { include: { modifiers: true } },
@@ -25,6 +29,7 @@ export const orderListInclude = {
 export const orderDetailInclude = {
   items: { include: { modifiers: true } },
   statusHistory: { orderBy: { createdAt: 'asc' } },
+  notifications: { orderBy: { createdAt: 'asc' } },
 } as const;
 
 function toItemDto(item: OrderItem & { modifiers: OrderItemModifier[] }): OrderItemDto {
@@ -87,6 +92,16 @@ export function toOrderDto(order: OrderFull): OrderDto {
       note: entry.note,
       changedBy: null,
       createdAt: entry.createdAt.toISOString(),
+    })),
+    // El personal tiene que poder ver qué se le dijo al cliente y si llegó: si
+    // no llegó, alguien va a tener que llamarlo.
+    notifications: (order.notifications ?? []).map((message) => ({
+      kind: message.kind,
+      status: message.status,
+      body: message.body,
+      skipReason: message.skipReason,
+      sentAt: message.sentAt?.toISOString() ?? null,
+      createdAt: message.createdAt.toISOString(),
     })),
     // La UI no tiene que replicar la máquina de estados: el backend le dice qué
     // botones mostrar.

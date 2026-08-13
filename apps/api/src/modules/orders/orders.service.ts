@@ -23,6 +23,7 @@ import { NotFoundError, ValidationError } from '../../shared/errors.js';
 import { buildPage, decodeCursor } from '../../shared/pagination.js';
 import { tryNormalizePhone } from '../../shared/phone.js';
 import { refreshCustomerStats } from '../customers/customers.service.js';
+import { enqueueOrderMessage, notifyStatusChange } from '../messaging/messaging.service.js';
 import { orderDetailInclude, orderListInclude, toOrderDto, toOrderSummaryDto } from './orders.mapper.js';
 import { computeLineTotal, computeTotals, type PricedLine } from './orders.pricing.js';
 import {
@@ -333,6 +334,14 @@ export async function createOrder(
     include: orderDetailInclude,
   });
   if (!created) throw new NotFoundError('El pedido no existe');
+
+  // Sólo se acusa recibo de los pedidos que llegaron por un canal
+  // conversacional. En uno tomado por teléfono o en el mostrador, el cliente ya
+  // sabe que su pedido entró: el mensaje sobraría.
+  if (created.source === 'WHATSAPP' || created.source === 'WEB') {
+    await enqueueOrderMessage(ctx, { order: created, kind: 'ORDER_RECEIVED' });
+  }
+
   return toOrderDto(created);
 }
 
@@ -457,6 +466,12 @@ async function applyStatus(
   // Cancelar saca el pedido de los totales del cliente.
   if (order.customerId) await refreshCustomerStats(ctx, order.customerId);
 
+  const updated = await findOrThrow(ctx, publicId);
+  await notifyStatusChange(ctx, updated);
+
+  // Se relee para que la respuesta incluya el aviso recién encolado: el panel
+  // muestra los avisos en el detalle, y si faltara el último parecería que el
+  // cliente no fue notificado.
   return toOrderDto(await findOrThrow(ctx, publicId));
 }
 

@@ -38,6 +38,33 @@ IA es un detalle de implementación intercambiable. Ninguna regla de negocio viv
 | **Historial** | Filtros por estado, modalidad y texto |
 | **Dashboard** | Ventas, cantidad de pedidos, ticket promedio, más vendidos y distribución por modalidad y pago |
 | **Configuración** | Comercio, zonas de envío, métodos de pago y usuarios |
+| **Avisos por WhatsApp** | Mensajes automáticos al cliente cuando el pedido se confirma, está listo para retirar o sale a la calle |
+
+### Avisos automáticos al cliente
+
+Cuando el personal mueve un pedido de estado, el sistema le avisa al cliente por WhatsApp:
+
+| Estado | Qué recibe el cliente |
+|---|---|
+| Pedido recibido | Sólo si llegó por WhatsApp o por la web: quien pidió por teléfono ya lo sabe |
+| Confirmado | "Confirmamos tu pedido #37 y ya lo estamos preparando" |
+| Listo | Sólo en retiro y salón. En un envío el pedido todavía no salió, y avisar ahí haría salir al cliente a la puerta al pedo |
+| En camino | "Tu pedido #37 salió a Av. 18 de Julio 1435" |
+| Cancelado | Con el motivo |
+
+Los mensajes van a una cola persistida en vez de enviarse en medio del request: marcar un pedido como
+listo no puede quedar esperando a la API de WhatsApp, y una caída del proveedor no puede perder
+avisos. Se reintentan solos, y el panel muestra en el detalle del pedido qué se le dijo al cliente y
+si llegó.
+
+**Sin credenciales de Meta, los envíos se simulan** y quedan en el log: alcanza para probar el flujo
+completo. Para enviar de verdad hay que poner `WHATSAPP_PROVIDER=cloud` y completar las credenciales
+de WhatsApp Business Cloud API.
+
+Una limitación que impone WhatsApp, no el sistema: sólo se puede escribir libremente a alguien dentro
+de las **24 horas** posteriores a su último mensaje. Fuera de esa ventana hace falta una plantilla
+aprobada por Meta. El aviso queda marcado como "no enviado" con el motivo a la vista, para que el
+personal sepa que a ese cliente hay que llamarlo.
 
 ## Puesta en marcha (desarrollo)
 

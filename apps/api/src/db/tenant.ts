@@ -38,6 +38,7 @@ const TENANT_MODELS = new Set<string>([
   'OrderItem',
   'OrderItemModifier',
   'OrderStatusHistory',
+  'OutboundMessage',
 ]);
 
 /** Operaciones cuyo `where` acota qué filas se leen o se tocan. */

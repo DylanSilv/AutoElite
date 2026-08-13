@@ -206,9 +206,19 @@ async function main(): Promise<void> {
     throw new Error('En producción hay que definir SEED_OWNER_PASSWORD explícitamente.');
   }
 
+  // La configuración regional se actualiza también en un comercio que ya
+  // existe: si sólo se creara, volver a correr el seed dejaría un comercio
+  // viejo con la moneda o la zona horaria equivocadas.
   const commerce = await prisma.commerce.upsert({
     where: { slug: SLUG },
-    update: {},
+    update: {
+      timezone: TIMEZONE,
+      currency: 'UYU',
+      country: COUNTRY,
+      businessDayCutoff: CUTOFF,
+      phone: '+59827123456',
+      address: 'Av. 18 de Julio 1580, Montevideo',
+    },
     create: {
       name: 'La Napolitana',
       slug: SLUG,
@@ -373,6 +383,10 @@ async function main(): Promise<void> {
           name: customer.name,
           phoneE164: normalizePhone(customer.phone, COUNTRY),
           phoneRaw: customer.phone,
+          // Clientes que ya escribieron por WhatsApp: es lo que habilita
+          // responderles sin plantilla aprobada, y permite ver los avisos
+          // funcionando en la demostración.
+          lastInboundAt: new Date(),
           addresses: {
             create: {
               commerceId: commerce.id,

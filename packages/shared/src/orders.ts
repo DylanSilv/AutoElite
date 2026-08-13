@@ -169,6 +169,26 @@ export interface OrderQuoteDto extends OrderTotals {
   items: Omit<OrderItemDto, 'id'>[];
 }
 
+export const MESSAGE_STATUSES = ['PENDING', 'SENT', 'FAILED', 'SKIPPED'] as const;
+export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
+
+export const MESSAGE_STATUS_LABELS: Record<MessageStatus, string> = {
+  PENDING: 'Enviando',
+  SENT: 'Enviado',
+  FAILED: 'Falló',
+  SKIPPED: 'No enviado',
+};
+
+/** Aviso automático al cliente, para que el personal sepa qué se le dijo. */
+export interface OrderNotificationDto {
+  kind: string;
+  status: MessageStatus;
+  body: string;
+  skipReason: string | null;
+  sentAt: string | null;
+  createdAt: string;
+}
+
 export interface OrderStatusHistoryDto {
   fromStatus: OrderStatus | null;
   toStatus: OrderStatus;
@@ -209,6 +229,7 @@ export interface OrderDto extends OrderSummaryDto {
   cancelReason: string | null;
   items: OrderItemDto[];
   statusHistory: OrderStatusHistoryDto[];
+  notifications: OrderNotificationDto[];
   allowedTransitions: OrderStatus[];
 }
 

@@ -283,6 +283,16 @@ model Customer {
   totalSpentCents Int       @default(0)
   lastOrderAt     DateTime?
 
+  /// Último mensaje recibido del cliente por WhatsApp.
+  ///
+  /// WhatsApp sólo permite escribirle libremente a alguien dentro de las 24
+  /// horas posteriores a su último mensaje; fuera de esa ventana hace falta una
+  /// plantilla aprobada por Meta. Sin este dato no se puede saber de antemano
+  /// si un aviso va a poder entregarse.
+  lastInboundAt DateTime?
+  /// El cliente pidió no recibir avisos automáticos.
+  acceptsNotifications Boolean @default(true)
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -446,6 +456,7 @@ model Order {
   paymentMethod PaymentMethod?       @relation(fields: [paymentMethodId], references: [id])
   items         OrderItem[]
   statusHistory OrderStatusHistory[]
+  notifications OutboundMessage[]
 
   @@unique([commerceId, businessDate, number])
   @@unique([commerceId, idempotencyKey])
@@ -518,6 +529,66 @@ model OrderStatusHistory {
 
   @@index([commerceId])
   @@index([orderId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Mensajería saliente (WhatsApp)
+// ---------------------------------------------------------------------------
+
+enum MessageKind {
+  ORDER_RECEIVED
+  ORDER_CONFIRMED
+  ORDER_READY_PICKUP
+  ORDER_READY_DINE_IN
+  ORDER_ON_THE_WAY
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+  /// No se envía por una razón conocida: el cliente no tiene teléfono, pidió no
+  /// recibir avisos, o está fuera de la ventana en la que WhatsApp permite
+  /// escribirle sin plantilla aprobada.
+  SKIPPED
+}
+
+/// Cola de mensajes salientes.
+///
+/// Se persiste en vez de enviar en medio del request por tres razones: marcar
+/// un pedido como listo no puede quedar esperando a la API de WhatsApp, una
+/// caída del proveedor no puede perder avisos, y hace falta poder reintentar y
+/// auditar qué se le dijo a cada cliente.
+model OutboundMessage {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  orderId    Int?
+  customerId Int?
+
+  toPhoneE164 String
+  kind        MessageKind
+  body        String        @db.Text
+  status      MessageStatus @default(PENDING)
+
+  attempts          Int     @default(0)
+  lastError         String? @db.Text
+  providerMessageId String?
+  /// Motivo cuando queda en SKIPPED, para que el personal entienda por qué el
+  /// cliente no recibió el aviso.
+  skipReason        String?
+
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId, status, createdAt])
+  @@index([orderId])
 }
 
 /// Correlativo diario por comercio, actualizado bajo bloqueo transaccional.

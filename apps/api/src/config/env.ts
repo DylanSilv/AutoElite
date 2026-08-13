@@ -49,6 +49,16 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+
+  // Mensajería saliente. Sin credenciales, "log" simula los envíos y deja el
+  // mensaje en la consola: alcanza para probar todo el flujo sin una cuenta de
+  // Meta ni gastar conversaciones.
+  WHATSAPP_PROVIDER: z.enum(['log', 'cloud']).default('log'),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_API_VERSION: z.string().default('v21.0'),
+  /** Cada cuánto se vacía la cola de mensajes pendientes. */
+  MESSAGING_DISPATCH_INTERVAL_MS: z.coerce.number().int().min(1000).max(600_000).default(10_000),
 });
 
 const parsed = envSchema.safeParse(process.env);
