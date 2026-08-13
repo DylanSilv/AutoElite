@@ -215,6 +215,8 @@ export interface OrderDto extends OrderSummaryDto {
 /** Vista operativa del día: los pedidos vivos, agrupados por estado. */
 export interface OrderBoardDto {
   businessDate: string;
+  /** Entregados del día: se cuentan, pero no ocupan una columna del tablero. */
+  deliveredCount: number;
   columns: { status: OrderStatus; orders: OrderSummaryDto[] }[];
 }
 

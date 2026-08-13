@@ -535,22 +535,27 @@ async function main(): Promise<void> {
 
   // Servicio en curso: pedidos vivos repartidos por estado, para que el tablero
   // se vea como durante un viernes a la noche.
+  //
+  // El orden va del más viejo al más nuevo, y el estado acompaña: los que ya se
+  // entregaron entraron hace rato y los pendientes recién llegaron. Al revés, el
+  // tablero mostraría pedidos "pendientes hace dos horas", que en una pizzería
+  // real significaría que algo salió muy mal.
   const liveStatuses: OrderStatus[] = [
-    'PENDIENTE',
-    'PENDIENTE',
-    'PENDIENTE',
-    'CONFIRMADO',
-    'CONFIRMADO',
-    'EN_PREPARACION',
-    'EN_PREPARACION',
-    'EN_PREPARACION',
-    'LISTO',
-    'LISTO',
+    'ENTREGADO',
+    'ENTREGADO',
+    'ENTREGADO',
     'EN_CAMINO',
     'EN_CAMINO',
-    'ENTREGADO',
-    'ENTREGADO',
-    'ENTREGADO',
+    'LISTO',
+    'LISTO',
+    'EN_PREPARACION',
+    'EN_PREPARACION',
+    'EN_PREPARACION',
+    'CONFIRMADO',
+    'CONFIRMADO',
+    'PENDIENTE',
+    'PENDIENTE',
+    'PENDIENTE',
   ];
 
   for (const [index, status] of liveStatuses.entries()) {

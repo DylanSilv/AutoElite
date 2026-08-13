@@ -1,0 +1,62 @@
+# Despliegue completo: base, API y panel.
+#
+#   cp .env.prod.example .env.prod   # y completar los secretos
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# El panel queda en http://localhost y habla con la API por el mismo origen, así
+# que no hace falta exponer el puerto de la API hacia afuera.
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?falta MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-autoelite}
+      MYSQL_USER: ${MYSQL_USER:-autoelite}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?falta MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: mysql://${MYSQL_USER:-autoelite}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-autoelite}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?falta JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?falta JWT_REFRESH_SECRET}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      # En cuanto haya HTTPS delante, poner true.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    # Las migraciones se aplican como paso explícito del arranque, no desde el
+    # código: así un despliegue que falle no deja la base a medio migrar.
+    command: >
+      sh -c "npx prisma migrate deploy && node dist/server.js"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-80}:80"
+
+volumes:
+  mysql-data:

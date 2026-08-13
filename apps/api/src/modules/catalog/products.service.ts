@@ -38,7 +38,9 @@ export async function listProducts(
       ...(filters.search ? { name: { contains: filters.search } } : {}),
       ...(filters.categoryId ? { category: { publicId: filters.categoryId } } : {}),
     },
-    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    // Primero por categoría y después por posición dentro de ella: si se
+    // ordenara sólo por sortOrder, el listado mezclaría pizzas con postres.
+    orderBy: [{ category: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { name: 'asc' }],
     include: productInclude,
   });
   return products.map(toProductDto);

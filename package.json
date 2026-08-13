@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @autoelite/api dev",
+    "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "db:migrate": "pnpm --filter @autoelite/api db:migrate",
@@ -19,7 +20,12 @@
     "typescript": "^5.7.2"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "esbuild"]
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild"
+    ]
   },
   "packageManager": "pnpm@10.33.0"
 }

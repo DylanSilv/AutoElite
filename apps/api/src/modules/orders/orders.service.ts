@@ -398,17 +398,16 @@ export async function getBoard(ctx: TenantContext): Promise<OrderBoardDto> {
 
   const summaries = orders.map(toOrderSummaryDto);
 
+  // El tablero muestra sólo lo que está en curso: los entregados se cuentan
+  // aparte y se consultan en el historial. Así las columnas entran en pantalla
+  // sin scroll horizontal, que es como se usa durante el servicio.
   return {
     businessDate,
+    deliveredCount: summaries.filter((order) => order.status === 'ENTREGADO').length,
     columns: ACTIVE_ORDER_STATUSES.map((status) => ({
       status,
       orders: summaries.filter((order) => order.status === status),
-    })).concat({
-      status: 'ENTREGADO',
-      orders: summaries.filter(
-        (order) => order.status === 'ENTREGADO' && order.placedAt >= `${businessDate}T00:00:00`,
-      ),
-    }),
+    })),
   };
 }
 

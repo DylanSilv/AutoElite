@@ -3,10 +3,12 @@
 Plataforma de gestión de pedidos para comercios gastronómicos, con un piloto inicial en una
 pizzería y un agente de IA sobre WhatsApp en fases posteriores.
 
-**Estado actual: fase 1 en curso.** Las etapas 1.1 (andamiaje) y 1.2 (autenticación y aislamiento
-multi-tenant) están implementadas. El catálogo, los clientes y los pedidos vienen después; el modelo
-del catálogo está bloqueado a propósito hasta tener las respuestas del bloque A de
-[docs/07](docs/07-preguntas-para-la-pizzeria.md).
+**Estado actual: MVP funcional.** El sistema permite operar una pizzería de punta a punta: cargar
+pedidos, seguirlos por estado, gestionar menú y clientes, y ver métricas. Viene con datos de
+demostración —realistas pero ficticios— para poder mostrarlo funcionando.
+
+Lo que sigue después del MVP está en [docs/06](docs/06-mvp.md): WhatsApp y el agente de IA (fase 2),
+audios (fase 3) y telefonía (fase 4).
 
 ## Principio rector
 
@@ -25,7 +27,19 @@ IA es un detalle de implementación intercambiable. Ninguna regla de negocio viv
 | [06 — MVP y fases](docs/06-mvp.md) | Alcance cerrado de la fase 1, qué queda explícitamente afuera y el plan por etapas |
 | [07 — Preguntas para la pizzería](docs/07-preguntas-para-la-pizzeria.md) | Lo que hay que validar con el comercio antes de escribir determinado código |
 
-## Puesta en marcha
+## Funcionalidad
+
+| Módulo | Qué hace |
+|---|---|
+| **Tablero de pedidos** | Columnas por estado, con antigüedad de cada pedido y avance en un toque |
+| **Alta de pedido** | Todo en una vista: reconoce al cliente por teléfono, arma el pedido y muestra el total calculado por el backend |
+| **Menú** | Productos con tamaños y extras; corte de disponibilidad durante el servicio |
+| **Clientes** | Ficha con direcciones, cantidad de pedidos y total gastado, alimentada sola |
+| **Historial** | Filtros por estado, modalidad y texto |
+| **Dashboard** | Ventas, cantidad de pedidos, ticket promedio, más vendidos y distribución por modalidad y pago |
+| **Configuración** | Comercio, zonas de envío, métodos de pago y usuarios |
+
+## Puesta en marcha (desarrollo)
 
 Requiere Node 20+, pnpm y Docker (o un MySQL 8 accesible).
 
@@ -35,11 +49,12 @@ cp .env.example .env          # completar DATABASE_URL y los secretos
 pnpm db:up                    # levanta MySQL con docker compose
 pnpm --filter @autoelite/api db:migrate
 pnpm --filter @autoelite/api db:seed
-pnpm dev                      # API en http://localhost:3000
+pnpm dev                      # API en :3000
+pnpm --filter @autoelite/web dev   # panel en :5173
 ```
 
-El seed crea el comercio piloto y un usuario `OWNER`. La contraseña inicial se imprime en consola y
-hay que cambiarla en el primer login; en producción se exige definir `SEED_OWNER_PASSWORD`.
+El seed carga el menú, las zonas, los clientes y dos semanas de historial, e imprime en consola el
+usuario y la contraseña de acceso.
 
 Para los tests hace falta una base aparte y su propio `.env.test`:
 
@@ -48,16 +63,36 @@ pnpm --filter @autoelite/api db:test:deploy
 pnpm test
 ```
 
+## Despliegue
+
+```bash
+cp .env.prod.example .env.prod    # completar secretos: openssl rand -base64 48
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec api node dist/seed.js
+```
+
+El panel queda en `http://localhost` y habla con la API por el mismo origen a través de nginx, así
+que no hace falta exponer el puerto de la API. Las migraciones se aplican al arrancar el contenedor,
+como paso explícito.
+
+**Antes de exponerlo a internet:** poner HTTPS delante y `COOKIE_SECURE=true`, o la cookie de sesión
+viaja en claro.
+
 ## Estructura
 
 ```
 apps/api            Backend Express + Prisma (núcleo del producto)
-packages/shared     Tipos y esquemas Zod del contrato, compartidos con el frontend
+apps/web            Panel React + Vite
+packages/shared     Tipos y esquemas Zod del contrato, compartidos por ambos
 docs/               Análisis, arquitectura y plan por fases
 ```
 
-## Cómo seguir
+## Datos de demostración
 
-1. Responder las decisiones abiertas del documento 01, sección 3.
-2. Llevar el bloque A del cuestionario del documento 07 a la pizzería: bloquea la etapa 1.3.
-3. Seguir con el catálogo (1.3), clientes (1.4) y pedidos (1.5).
+El menú, los clientes y el historial son ficticios pero con la forma del negocio real. Cuando la
+pizzería se sume, se reemplazan por los suyos: el seed limpia y recarga sólo los datos operativos.
+
+Hay una decisión de modelo que quedó abierta a propósito y conviene cerrar antes de cargar datos
+reales: **la pizza mitad y mitad**. Está en el bloque A de
+[docs/07](docs/07-preguntas-para-la-pizzeria.md), junto con el resto de lo que hay que validar con el
+comercio.

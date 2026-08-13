@@ -11,6 +11,16 @@ const REFRESH_COOKIE = 'ae_refresh';
 const REFRESH_COOKIE_PATH = '/api/v1/auth';
 
 /**
+ * Pista legible por el panel de que existe una sesión.
+ *
+ * No es una credencial —no sirve para autenticar nada— y por eso puede leerse
+ * desde JavaScript. Existe para que el panel sepa si vale la pena intentar
+ * renovar la sesión al abrirse, en lugar de disparar siempre un 401 contra el
+ * servidor.
+ */
+const SESSION_HINT_COOKIE = 'ae_session';
+
+/**
  * El refresh token va en cookie httpOnly y el access token en el cuerpo.
  *
  * Así el access token vive en memoria del panel (no en localStorage, donde
@@ -24,6 +34,13 @@ function setRefreshCookie(res: Response, token: string): void {
     path: REFRESH_COOKIE_PATH,
     maxAge: REFRESH_TOKEN_TTL_MS,
   });
+  res.cookie(SESSION_HINT_COOKIE, '1', {
+    httpOnly: false,
+    secure: env.COOKIE_SECURE,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: REFRESH_TOKEN_TTL_MS,
+  });
 }
 
 function clearRefreshCookie(res: Response): void {
@@ -32,6 +49,11 @@ function clearRefreshCookie(res: Response): void {
     secure: env.COOKIE_SECURE,
     sameSite: 'lax',
     path: REFRESH_COOKIE_PATH,
+  });
+  res.clearCookie(SESSION_HINT_COOKIE, {
+    secure: env.COOKIE_SECURE,
+    sameSite: 'lax',
+    path: '/',
   });
 }
 

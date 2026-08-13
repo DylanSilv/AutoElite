@@ -74,8 +74,10 @@ export async function getDashboard(
     range: { from, to },
     salesCents,
     ordersCount,
-    // Se redondea al centavo: un promedio con decimales infinitos no ayuda a nadie.
-    averageTicketCents: ordersCount === 0 ? 0 : Math.round(salesCents / ordersCount),
+    // Se redondea al peso: en un promedio, la precisión por debajo del peso es
+    // ruido y hace que el número se lea como un error de cálculo.
+    averageTicketCents:
+      ordersCount === 0 ? 0 : Math.round(salesCents / ordersCount / 100) * 100,
     activeOrdersCount,
     byType: byTypeRaw.map((row) => ({
       type: row.type as OrderType,
