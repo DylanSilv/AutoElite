@@ -9,10 +9,30 @@ export function notFoundHandler(_req: Request, _res: Response, next: NextFunctio
   next(new NotFoundError('La ruta no existe'));
 }
 
+/** Mensaje de un problema de conectividad con la base, no de una regla de negocio. */
+function databaseUnavailable(): AppError {
+  return new AppError(
+    'DATABASE_UNAVAILABLE',
+    503,
+    'No hay conexión con la base de datos. Verificá que esté levantada y que DATABASE_URL apunte al puerto correcto.',
+  );
+}
+
 function toAppError(err: unknown): AppError | null {
   if (err instanceof AppError) return err;
 
+  // Si la base no responde, el 500 genérico esconde justo el dato que hace
+  // falta para arreglarlo. Se distingue a propósito: no es un error del
+  // programa, es infraestructura que no está disponible.
+  if (err instanceof Prisma.PrismaClientInitializationError) {
+    return databaseUnavailable();
+  }
+
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    // P1001/P1002: no se pudo alcanzar el servidor de base de datos.
+    if (err.code === 'P1001' || err.code === 'P1002') {
+      return databaseUnavailable();
+    }
     // P2002: violación de índice único. P2025: registro no encontrado.
     if (err.code === 'P2002') {
       return new AppError('CONFLICT', 409, 'El recurso ya existe', {
@@ -47,7 +67,11 @@ export function errorHandler(
   const appError = toAppError(err);
 
   if (appError) {
-    if (appError.status >= 500) {
+    if (appError.code === 'DATABASE_UNAVAILABLE') {
+      // Sin stack trace: el stack de Prisma no agrega nada y en una caída de la
+      // base se repetiría en cada request, tapando el resto del log.
+      logger.error({ requestId: req.requestId }, appError.message);
+    } else if (appError.status >= 500) {
       logger.error({ err, requestId: req.requestId }, appError.message);
     } else {
       logger.debug({ requestId: req.requestId, code: appError.code }, appError.message);

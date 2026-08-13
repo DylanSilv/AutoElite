@@ -13,6 +13,7 @@ export const ERROR_CODES = [
   'CONFLICT',
   'INTERNAL_ERROR',
   'RATE_LIMITED',
+  'DATABASE_UNAVAILABLE',
 
   // Autenticación y autorización
   'UNAUTHENTICATED',
