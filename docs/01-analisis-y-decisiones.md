@@ -39,7 +39,7 @@ la elección impacta el pedido, el panel, el dashboard y el agente:
 UI mínima. Todo producto tiene al menos una variante (si no tiene tamaños, una variante "Única"),
 así el pedido siempre referencia una variante y no hay dos caminos de código.
 
-El caso que puede romper el modelo es la **pizza mitad y mitad**, que en Argentina es habitual y no
+El caso que puede romper el modelo es la **pizza mitad y mitad**, habitual en el Río de la Plata, que no
 entra en "un item = una variante". Está en el cuestionario del documento 07 porque hay que
 preguntarlo antes de cerrar el esquema, no después.
 
@@ -47,7 +47,7 @@ preguntarlo antes de cerrar el esquema, no después.
 
 Si `order_item` solo guarda `product_id` y el precio se lee del catálogo, subir el precio de la
 muzzarella **reescribe el pasado**: el pedido de hace tres meses pasa a valer otra cosa y el
-dashboard miente. En un país con la inflación que tenemos, esto deja de ser teórico en semanas.
+dashboard miente. Con precios que se ajustan seguido, esto deja de ser teórico en pocos meses.
 
 Cada línea del pedido debe guardar copia de: nombre del producto, nombre de la variante, precio
 unitario, cantidad y precio de cada modificador. La FK al producto se conserva solo para reportes

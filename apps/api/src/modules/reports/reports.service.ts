@@ -1,8 +1,6 @@
 import { ACTIVE_ORDER_STATUSES, type DashboardDto, type OrderType } from '@autoelite/shared';
-import { prisma } from '../../db/prisma.js';
 import type { TenantContext } from '../../http/context.js';
 import { businessDateOf, formatDateColumn, toDateColumn } from '../../shared/business-date.js';
-import { NotFoundError } from '../../shared/errors.js';
 
 /**
  * Métricas del dashboard.
@@ -19,10 +17,11 @@ export async function getDashboard(
   ctx: TenantContext,
   range: { from?: string; to?: string },
 ): Promise<DashboardDto> {
-  const commerce = await prisma.commerce.findUnique({ where: { id: ctx.commerceId } });
-  if (!commerce) throw new NotFoundError('El comercio no existe');
-
-  const today = businessDateOf(new Date(), commerce.timezone, commerce.businessDayCutoff);
+  const today = businessDateOf(
+    new Date(),
+    ctx.commerce.timezone,
+    ctx.commerce.businessDayCutoff,
+  );
   const from = range.from ?? today;
   const to = range.to ?? today;
 

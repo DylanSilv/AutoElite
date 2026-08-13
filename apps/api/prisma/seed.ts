@@ -16,7 +16,8 @@ import { computeLineTotal, computeTotals } from '../src/modules/orders/orders.pr
 
 const prisma = new PrismaClient();
 
-const TIMEZONE = 'America/Argentina/Buenos_Aires';
+const TIMEZONE = 'America/Montevideo';
+const COUNTRY = 'UY';
 const CUTOFF = '05:00';
 const SLUG = 'pizzeria-piloto';
 
@@ -24,58 +25,71 @@ const SLUG = 'pizzeria-piloto';
 // Catálogo
 // ---------------------------------------------------------------------------
 
-/** Precios en centavos: $8.500 → 850000. */
+/** Precios en centésimos: $650 → 65000. */
 const p = (pesos: number) => pesos * 100;
 
-const PIZZA_SIZES = ['Chica (6 porciones)', 'Mediana (8 porciones)', 'Grande (12 porciones)'];
+const PIZZA_SIZES = ['Chica (4 porciones)', 'Mediana (6 porciones)', 'Grande (8 porciones)'];
 
 const MENU = [
   {
     category: 'Pizzas',
     products: [
-      { name: 'Muzzarella', description: 'Salsa de tomate, muzzarella y aceitunas', prices: [8500, 11500, 14500] },
-      { name: 'Napolitana', description: 'Muzzarella, rodajas de tomate y ajo', prices: [9500, 12800, 16200] },
-      { name: 'Fugazzeta', description: 'Cebolla, muzzarella y orégano', prices: [9800, 13200, 16800] },
-      { name: 'Especial', description: 'Muzzarella, jamón, morrones y aceitunas', prices: [10500, 14000, 17800] },
-      { name: 'Calabresa', description: 'Muzzarella, longaniza calabresa y morrón', prices: [10200, 13800, 17500] },
-      { name: 'Jamón y morrones', description: 'Muzzarella, jamón cocido y morrones asados', prices: [10000, 13500, 17000] },
-      { name: 'Cuatro quesos', description: 'Muzzarella, roquefort, parmesano y provolone', prices: [11000, 14800, 18500] },
-      { name: 'Rúcula y crudo', description: 'Muzzarella, rúcula fresca, jamón crudo y parmesano', prices: [12000, 16000, 20000] },
+      { name: 'Muzzarella', description: 'Salsa de tomate, muzzarella y aceitunas', prices: [390, 520, 650] },
+      { name: 'Napolitana', description: 'Muzzarella, rodajas de tomate y ajo', prices: [450, 590, 730] },
+      { name: 'Fugazzeta', description: 'Cebolla, muzzarella y orégano', prices: [470, 610, 760] },
+      { name: 'Especial', description: 'Muzzarella, jamón, morrones y aceitunas', prices: [500, 650, 810] },
+      { name: 'Calabresa', description: 'Muzzarella, longaniza calabresa y morrón', prices: [480, 630, 780] },
+      { name: 'Jamón y morrones', description: 'Muzzarella, jamón cocido y morrones asados', prices: [460, 600, 750] },
+      { name: 'Cuatro quesos', description: 'Muzzarella, dambo, parmesano y azul', prices: [520, 680, 840] },
+      { name: 'Rúcula y jamón crudo', description: 'Muzzarella, rúcula fresca, jamón crudo y parmesano', prices: [560, 730, 900] },
     ],
     sizes: PIZZA_SIZES,
     modifierGroups: ['Extras para pizza', 'Punto de cocción'],
   },
   {
-    category: 'Empanadas',
+    category: 'Fainá y canastitas',
     products: [
-      { name: 'Empanada de carne suave', description: 'Carne cortada a cuchillo', prices: [1200, 12500] },
-      { name: 'Empanada de carne picante', description: 'Con un toque de ají molido', prices: [1200, 12500] },
-      { name: 'Empanada de jamón y queso', description: null, prices: [1200, 12500] },
-      { name: 'Empanada de pollo', description: null, prices: [1200, 12500] },
-      { name: 'Empanada de humita', description: 'Choclo cremoso', prices: [1200, 12500] },
-      { name: 'Empanada de verdura', description: 'Acelga y salsa blanca', prices: [1200, 12500] },
+      { name: 'Fainá', description: 'A la piedra, bien fina', prices: [90, 260] },
+      { name: 'Fainá con muzzarella', description: 'La clásica "a caballo"', prices: [140, 390] },
     ],
-    sizes: ['Unidad', 'Docena'],
+    sizes: ['Porción', 'Entera'],
     modifierGroups: [],
   },
   {
-    category: 'Milanesas',
+    category: 'Chivitos y minutas',
     products: [
-      { name: 'Milanesa napolitana con papas', description: 'Con jamón, queso y salsa', prices: [13500] },
-      { name: 'Milanesa a caballo', description: 'Con dos huevos fritos y papas', prices: [12800] },
+      { name: 'Chivito canadiense', description: 'Lomo, panceta, jamón, queso, huevo y ensalada', prices: [590] },
+      { name: 'Chivito al plato', description: 'Con papas fritas y guarnición', prices: [690] },
+      { name: 'Chivito simple', description: 'Lomo, queso, jamón y lechuga', prices: [490] },
+      { name: 'Milanesa con papas fritas', description: null, prices: [480] },
+      { name: 'Milanesa napolitana con papas', description: 'Con jamón, queso y salsa', prices: [560] },
     ],
     sizes: ['Porción'],
     modifierGroups: [],
   },
   {
+    category: 'Empanadas',
+    products: [
+      { name: 'Empanada de carne', description: 'Cortada a cuchillo', prices: [95, 980] },
+      { name: 'Empanada de jamón y queso', description: null, prices: [95, 980] },
+      { name: 'Empanada de pollo', description: null, prices: [95, 980] },
+      { name: 'Empanada de humita', description: 'Choclo cremoso', prices: [95, 980] },
+      { name: 'Empanada de verdura', description: 'Acelga y salsa blanca', prices: [95, 980] },
+      { name: 'Empanada de atún', description: null, prices: [95, 980] },
+    ],
+    sizes: ['Unidad', 'Docena'],
+    modifierGroups: [],
+  },
+  {
     category: 'Bebidas',
     products: [
-      { name: 'Coca-Cola 1,5L', description: null, prices: [3500] },
-      { name: 'Coca-Cola 500ml', description: null, prices: [2200] },
-      { name: 'Sprite 1,5L', description: null, prices: [3400] },
-      { name: 'Agua mineral 500ml', description: null, prices: [1800] },
-      { name: 'Cerveza Quilmes 1L', description: null, prices: [4200] },
-      { name: 'Vino tinto Malbec', description: 'Botella 750ml', prices: [6500] },
+      { name: 'Coca-Cola 1,5L', description: null, prices: [180] },
+      { name: 'Coca-Cola 600ml', description: null, prices: [110] },
+      { name: 'Sprite 1,5L', description: null, prices: [175] },
+      { name: 'Agua mineral 600ml', description: null, prices: [85] },
+      { name: 'Cerveza Patricia 1L', description: null, prices: [220] },
+      { name: 'Cerveza Pilsen 960ml', description: null, prices: [210] },
+      { name: 'Vino Tannat', description: 'Botella 750ml', prices: [480] },
     ],
     sizes: ['Única'],
     modifierGroups: [],
@@ -83,8 +97,9 @@ const MENU = [
   {
     category: 'Postres',
     products: [
-      { name: 'Flan casero con dulce de leche', description: null, prices: [3800] },
-      { name: 'Helado (2 bochas)', description: 'Consultar sabores', prices: [4200] },
+      { name: 'Chajá (porción)', description: 'Merengue, durazno y crema', prices: [230] },
+      { name: 'Flan con dulce de leche', description: null, prices: [190] },
+      { name: 'Helado (2 bochas)', description: 'Consultar sabores', prices: [210] },
     ],
     sizes: ['Única'],
     modifierGroups: [],
@@ -97,12 +112,12 @@ const MODIFIER_GROUPS = [
     minSelect: 0,
     maxSelect: 5,
     options: [
-      { name: 'Huevo', priceDeltaCents: p(900) },
-      { name: 'Jamón', priceDeltaCents: p(1500) },
-      { name: 'Aceitunas', priceDeltaCents: p(700) },
-      { name: 'Morrón', priceDeltaCents: p(800) },
-      { name: 'Extra muzzarella', priceDeltaCents: p(1800) },
-      { name: 'Panceta', priceDeltaCents: p(1900) },
+      { name: 'Huevo', priceDeltaCents: p(60) },
+      { name: 'Jamón', priceDeltaCents: p(90) },
+      { name: 'Aceitunas', priceDeltaCents: p(50) },
+      { name: 'Morrón', priceDeltaCents: p(55) },
+      { name: 'Extra muzzarella', priceDeltaCents: p(110) },
+      { name: 'Panceta', priceDeltaCents: p(120) },
     ],
   },
   {
@@ -116,11 +131,16 @@ const MODIFIER_GROUPS = [
   },
 ];
 
+// Barrios de Montevideo, con tarifas plausibles según distancia al centro.
 const DELIVERY_ZONES = [
-  { name: 'Centro', feeCents: p(1500), estimatedMin: 20 },
-  { name: 'Zona norte', feeCents: p(2200), estimatedMin: 30 },
-  { name: 'Zona sur', feeCents: p(2500), estimatedMin: 35 },
-  { name: 'Zona oeste', feeCents: p(2800), estimatedMin: 40 },
+  { name: 'Centro', feeCents: p(120), estimatedMin: 20 },
+  { name: 'Cordón', feeCents: p(120), estimatedMin: 20 },
+  { name: 'Parque Rodó', feeCents: p(130), estimatedMin: 25 },
+  { name: 'Pocitos', feeCents: p(150), estimatedMin: 30 },
+  { name: 'Punta Carretas', feeCents: p(150), estimatedMin: 30 },
+  { name: 'La Blanqueada', feeCents: p(160), estimatedMin: 35 },
+  { name: 'Buceo', feeCents: p(170), estimatedMin: 35 },
+  { name: 'Malvín', feeCents: p(200), estimatedMin: 40 },
 ];
 
 const PAYMENT_METHODS = [
@@ -132,14 +152,14 @@ const PAYMENT_METHODS = [
 ];
 
 const CUSTOMERS = [
-  { name: 'Martina Gómez', phone: '11 4567-8901', street: 'Av. Rivadavia', number: '4520', apartment: '3B', neighborhood: 'Centro', reference: 'Timbre 3B, portón negro' },
-  { name: 'Diego Fernández', phone: '11 5623-1147', street: 'San Martín', number: '812', neighborhood: 'Zona norte', reference: 'Casa con reja verde' },
-  { name: 'Lucía Ramírez', phone: '11 3345-9902', street: 'Belgrano', number: '1290', apartment: 'PB A', neighborhood: 'Centro' },
-  { name: 'Javier Sosa', phone: '11 6712-4488', street: 'Mitre', number: '345', neighborhood: 'Zona sur', reference: 'Al lado del kiosco' },
-  { name: 'Carolina Ledesma', phone: '11 2298-7735', street: 'Sarmiento', number: '2210', apartment: '7C', neighborhood: 'Zona oeste' },
-  { name: 'Nicolás Ortiz', phone: '11 4488-2091', street: 'Alsina', number: '655', neighborhood: 'Centro' },
-  { name: 'Florencia Ríos', phone: '11 5511-6678', street: 'Moreno', number: '1876', neighborhood: 'Zona norte', reference: 'Edificio azul, 2do piso' },
-  { name: 'Sebastián Paz', phone: '11 7723-3390', street: 'Urquiza', number: '430', neighborhood: 'Zona sur' },
+  { name: 'Martina Silva', phone: '099 123 456', street: 'Av. 18 de Julio', number: '1435', apartment: 'Apto 302', neighborhood: 'Centro', reference: 'Timbre 302, puerta de vidrio' },
+  { name: 'Diego Techera', phone: '094 567 890', street: 'Bulevar España', number: '2140', neighborhood: 'Pocitos', reference: 'Casa con reja verde' },
+  { name: 'Lucía Bentancur', phone: '091 234 567', street: 'Ellauri', number: '780', apartment: 'Apto 1A', neighborhood: 'Punta Carretas' },
+  { name: 'Javier Sosa', phone: '098 765 432', street: '8 de Octubre', number: '3120', neighborhood: 'La Blanqueada', reference: 'Al lado del kiosco' },
+  { name: 'Carolina Olivera', phone: '095 331 447', street: 'Rivera', number: '2890', apartment: 'Apto 7C', neighborhood: 'Buceo' },
+  { name: 'Nicolás Pereyra', phone: '092 884 210', street: 'Colonia', number: '1560', neighborhood: 'Cordón' },
+  { name: 'Florencia Cabrera', phone: '096 118 903', street: 'Av. Brasil', number: '2745', neighborhood: 'Pocitos', reference: 'Edificio azul, 2do piso' },
+  { name: 'Sebastián Methol', phone: '099 776 331', street: 'Michigan', number: '1420', neighborhood: 'Malvín' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -192,10 +212,11 @@ async function main(): Promise<void> {
     create: {
       name: 'La Napolitana',
       slug: SLUG,
-      phone: '+5491145678900',
-      address: 'Av. Rivadavia 4500, CABA',
+      phone: '+59827123456',
+      address: 'Av. 18 de Julio 1580, Montevideo',
       timezone: TIMEZONE,
-      currency: 'ARS',
+      currency: 'UYU',
+      country: COUNTRY,
       businessDayCutoff: CUTOFF,
     },
   });
@@ -350,7 +371,7 @@ async function main(): Promise<void> {
         data: {
           commerceId: commerce.id,
           name: customer.name,
-          phoneE164: normalizePhone(customer.phone),
+          phoneE164: normalizePhone(customer.phone, COUNTRY),
           phoneRaw: customer.phone,
           addresses: {
             create: {
@@ -360,7 +381,7 @@ async function main(): Promise<void> {
               number: customer.number,
               apartment: 'apartment' in customer ? (customer.apartment ?? null) : null,
               neighborhood: customer.neighborhood,
-              city: 'CABA',
+              city: 'Montevideo',
               reference: 'reference' in customer ? (customer.reference ?? null) : null,
               deliveryZoneId: zone.id,
               isDefault: true,

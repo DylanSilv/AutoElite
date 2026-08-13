@@ -2,6 +2,7 @@ import type { AuthenticatedUser, LoginResponse, UserRole } from '@autoelite/shar
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api, restoreSession, setAccessToken, setUnauthenticatedHandler } from './api-client';
+import { configureFormatting } from './format';
 
 interface AuthState {
   user: AuthenticatedUser | null;
@@ -15,8 +16,15 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [user, setUserState] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Punto único donde se fija el usuario: así la moneda y la zona horaria del
+  // comercio quedan configuradas tanto al iniciar sesión como al restaurarla.
+  const setUser = useCallback((next: AuthenticatedUser | null) => {
+    if (next?.commerce) configureFormatting(next.commerce);
+    setUserState(next);
+  }, []);
 
   useEffect(() => {
     setUnauthenticatedHandler(() => setUser(null));

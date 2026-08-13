@@ -186,8 +186,10 @@ model Commerce {
   slug              String   @unique
   phone             String?
   address           String?
-  timezone          String   @default("America/Argentina/Buenos_Aires")
-  currency          String   @default("ARS")
+  timezone          String   @default("America/Montevideo")
+  currency          String   @default("UYU")
+  /// Define cómo se normalizan los teléfonos a E.164.
+  country           String   @default("UY")
   businessDayCutoff String   @default("05:00") // corte del día operativo, hora local
   settings          Json?
   isActive          Boolean  @default(true)

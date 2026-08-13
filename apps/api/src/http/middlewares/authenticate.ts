@@ -2,7 +2,9 @@ import type { ApiScope } from '@autoelite/shared';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { prisma } from '../../db/prisma.js';
 import { ForbiddenError, UnauthenticatedError } from '../../shared/errors.js';
+import { DEFAULT_COUNTRY, isSupportedCountry } from '../../shared/phone.js';
 import { hashSecret, verifyAccessToken } from '../../shared/tokens.js';
+import type { CommerceSettings } from '../context.js';
 
 const API_KEY_PREFIX = 'ae_';
 /** Evita un UPDATE por request solo para registrar el uso de una API key. */
@@ -30,6 +32,38 @@ function parseScopes(raw: unknown): ApiScope[] {
   return Array.isArray(raw) ? (raw.filter((s): s is ApiScope => typeof s === 'string') as ApiScope[]) : [];
 }
 
+/** Campos del comercio que viajan en el contexto de cada request. */
+const commerceSelect = {
+  id: true,
+  publicId: true,
+  name: true,
+  country: true,
+  timezone: true,
+  currency: true,
+  businessDayCutoff: true,
+  isActive: true,
+} as const;
+
+function toCommerceSettings(commerce: {
+  id: number;
+  publicId: string;
+  name: string;
+  country: string;
+  timezone: string;
+  currency: string;
+  businessDayCutoff: string;
+}): CommerceSettings {
+  return {
+    id: commerce.id,
+    publicId: commerce.publicId,
+    name: commerce.name,
+    country: isSupportedCountry(commerce.country) ? commerce.country : DEFAULT_COUNTRY,
+    timezone: commerce.timezone,
+    currency: commerce.currency,
+    businessDayCutoff: commerce.businessDayCutoff,
+  };
+}
+
 async function authenticateUser(req: Request, token: string): Promise<void> {
   const { sub } = await verifyAccessToken(token);
 
@@ -38,7 +72,7 @@ async function authenticateUser(req: Request, token: string): Promise<void> {
   // que expire el access token.
   const user = await prisma.user.findUnique({
     where: { publicId: sub },
-    include: { commerce: { select: { id: true, isActive: true } } },
+    include: { commerce: { select: commerceSelect } },
   });
 
   if (!user) throw new UnauthenticatedError('TOKEN_INVALID', 'Token inválido');
@@ -55,13 +89,14 @@ async function authenticateUser(req: Request, token: string): Promise<void> {
     name: user.name,
     role: user.role,
     commerceId: user.commerceId,
+    commerce: user.commerce ? toCommerceSettings(user.commerce) : null,
   };
 }
 
 async function authenticateApiClient(req: Request, key: string): Promise<void> {
   const client = await prisma.apiClient.findUnique({
     where: { keyHash: hashSecret(key) },
-    include: { commerce: { select: { isActive: true } } },
+    include: { commerce: { select: commerceSelect } },
   });
 
   if (!client || client.revokedAt) {
@@ -78,6 +113,7 @@ async function authenticateApiClient(req: Request, key: string): Promise<void> {
     name: client.name,
     scopes: parseScopes(client.scopes),
     commerceId: client.commerceId,
+    commerce: toCommerceSettings(client.commerce),
   };
 
   const stale =

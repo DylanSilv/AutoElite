@@ -112,7 +112,7 @@ export async function createCustomer(options: { commerceId: number; phone?: stri
     data: {
       commerceId: options.commerceId,
       name: options.name ?? 'Cliente de prueba',
-      phoneE164: options.phone ?? `+54911${String(Math.floor(random8()))}`,
+      phoneE164: options.phone ?? `+5989${String(Math.floor(random8()))}`,
       phoneRaw: options.phone ?? null,
     },
   });

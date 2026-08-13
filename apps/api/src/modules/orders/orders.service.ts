@@ -11,7 +11,7 @@ import {
   type QuoteOrderInput,
   type ChangeStatusInput,
 } from '@autoelite/shared';
-import { Prisma, type Commerce, type OrderStatus } from '@prisma/client';
+import { Prisma, type OrderStatus } from '@prisma/client';
 import type { TenantContext } from '../../http/context.js';
 import { prisma } from '../../db/prisma.js';
 import {
@@ -29,12 +29,6 @@ import {
   assertExpectedStatus,
   assertTransitionAllowed,
 } from './orders.state-machine.js';
-
-async function getCommerce(ctx: TenantContext): Promise<Commerce> {
-  const commerce = await prisma.commerce.findUnique({ where: { id: ctx.commerceId } });
-  if (!commerce) throw new NotFoundError('El comercio no existe');
-  return commerce;
-}
 
 /**
  * Convierte los items del request en líneas con precios congelados.
@@ -204,7 +198,9 @@ async function resolveCustomer(
     return { id: customer.id, name: customer.name, phone: customer.phoneE164 };
   }
 
-  const phoneE164 = input.customerPhone ? tryNormalizePhone(input.customerPhone) : null;
+  const phoneE164 = input.customerPhone
+    ? tryNormalizePhone(input.customerPhone, ctx.commerce.country)
+    : null;
   const name = input.customerName?.trim() || 'Cliente';
 
   if (!phoneE164) return { id: null, name, phone: null };
@@ -238,7 +234,6 @@ export async function createOrder(
     if (existing) return toOrderDto(existing);
   }
 
-  const commerce = await getCommerce(ctx);
   const lines = await resolveLines(ctx, input);
   const delivery = await resolveDelivery(ctx, input);
   const totals = computeTotals(lines, delivery.feeCents, input.discountCents);
@@ -253,7 +248,7 @@ export async function createOrder(
 
   const placedAt = new Date();
   const businessDate = toDateColumn(
-    businessDateOf(placedAt, commerce.timezone, commerce.businessDayCutoff),
+    businessDateOf(placedAt, ctx.commerce.timezone, ctx.commerce.businessDayCutoff),
   );
 
   const actorFields =
@@ -380,8 +375,11 @@ export async function listOrders(
 
 /** Vista operativa del día: lo que está abierto en la pantalla toda la noche. */
 export async function getBoard(ctx: TenantContext): Promise<OrderBoardDto> {
-  const commerce = await getCommerce(ctx);
-  const businessDate = businessDateOf(new Date(), commerce.timezone, commerce.businessDayCutoff);
+  const businessDate = businessDateOf(
+    new Date(),
+    ctx.commerce.timezone,
+    ctx.commerce.businessDayCutoff,
+  );
 
   const orders = await ctx.db.order.findMany({
     where: {

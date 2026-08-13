@@ -11,7 +11,12 @@ import { Prisma, type Customer, type CustomerAddress, type DeliveryZone } from '
 import type { TenantContext } from '../../http/context.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors.js';
 import { buildPage, decodeCursor } from '../../shared/pagination.js';
-import { InvalidPhoneError, normalizePhone, tryNormalizePhone } from '../../shared/phone.js';
+import {
+  InvalidPhoneError,
+  normalizePhone,
+  tryNormalizePhone,
+  type CountryCode,
+} from '../../shared/phone.js';
 
 type CustomerWithRelations = Customer & {
   addresses: (CustomerAddress & { deliveryZone: DeliveryZone | null })[];
@@ -56,9 +61,9 @@ export const customerInclude = {
   addresses: { include: { deliveryZone: true } },
 } as const;
 
-function normalizeOrThrow(raw: string): string {
+function normalizeOrThrow(raw: string, country: CountryCode): string {
   try {
-    return normalizePhone(raw);
+    return normalizePhone(raw, country);
   } catch (err) {
     if (err instanceof InvalidPhoneError) {
       throw new ValidationError('El teléfono no tiene un formato válido');
@@ -80,7 +85,7 @@ export async function listCustomers(
 ): Promise<Page<CustomerDto>> {
   // Un teléfono se busca normalizado; si no se puede normalizar, se busca por
   // el texto crudo para no dejar al operador sin resultados.
-  const normalized = params.phone ? tryNormalizePhone(params.phone) : null;
+  const normalized = params.phone ? tryNormalizePhone(params.phone, ctx.commerce.country) : null;
 
   const rows = await ctx.db.customer.findMany({
     where: {
@@ -119,7 +124,7 @@ export async function getCustomer(ctx: TenantContext, publicId: string): Promise
 
 /** Búsqueda por teléfono exacto: es la que va a usar `buscar_cliente()` en la fase 2. */
 export async function findByPhone(ctx: TenantContext, phone: string): Promise<CustomerDto | null> {
-  const normalized = tryNormalizePhone(phone);
+  const normalized = tryNormalizePhone(phone, ctx.commerce.country);
   if (!normalized) return null;
 
   const customer = await ctx.db.customer.findFirst({
@@ -157,7 +162,7 @@ export async function createCustomer(
   ctx: TenantContext,
   input: CreateCustomerInput,
 ): Promise<CustomerDto> {
-  const phoneE164 = normalizeOrThrow(input.phone);
+  const phoneE164 = normalizeOrThrow(input.phone, ctx.commerce.country);
 
   try {
     const customer = await ctx.db.customer.create({
@@ -186,7 +191,7 @@ export async function updateCustomer(
   input: UpdateCustomerInput,
 ): Promise<CustomerDto> {
   const customer = await findOrThrow(ctx, publicId);
-  const phoneE164 = input.phone ? normalizeOrThrow(input.phone) : undefined;
+  const phoneE164 = input.phone ? normalizeOrThrow(input.phone, ctx.commerce.country) : undefined;
 
   try {
     await ctx.db.customer.update({

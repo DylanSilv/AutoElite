@@ -26,8 +26,11 @@ model Commerce {
   phone   String?
   address String?
 
-  timezone String @default("America/Argentina/Buenos_Aires")
-  currency String @default("ARS")
+  timezone String @default("America/Montevideo")
+  currency String @default("UYU")
+  /// Determina cómo se normalizan los teléfonos a E.164: los planes de
+  /// numeración difieren de verdad entre países.
+  country  String @default("UY")
 
   /// Hora local a partir de la cual empieza un nuevo día operativo. Un pedido
   /// tomado a las 00:40 pertenece al día anterior para la caja del negocio.

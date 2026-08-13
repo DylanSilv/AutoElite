@@ -149,19 +149,19 @@ describe('creación de pedidos', () => {
   it('reconoce a un cliente existente por teléfono', async () => {
     const existing = await createCustomer({
       commerceId: commerce.id,
-      phone: '+5491145678901',
-      name: 'Martina Gómez',
+      phone: '+59899123456',
+      name: 'Martina Silva',
     });
 
     const res = await api
       .post('/api/v1/orders')
       .set(auth)
-      .send(takeawayOrder({ customerPhone: '11 15 4567-8901', customerName: 'Otro nombre' }))
+      .send(takeawayOrder({ customerPhone: '099 123 456', customerName: 'Otro nombre' }))
       .expect(201);
 
     // El teléfono es la identidad: escrito de otra forma sigue siendo la misma
     // persona, y no se duplica la ficha.
-    expect(res.body.customerName).toBe('Martina Gómez');
+    expect(res.body.customerName).toBe('Martina Silva');
     expect(await prisma.customer.count()).toBe(1);
 
     const stats = await prisma.customer.findUnique({ where: { id: existing.id } });
@@ -172,10 +172,10 @@ describe('creación de pedidos', () => {
     await api
       .post('/api/v1/orders')
       .set(auth)
-      .send(takeawayOrder({ customerPhone: '11 2233-4455', customerName: 'Nuevo Cliente' }))
+      .send(takeawayOrder({ customerPhone: '094 567 890', customerName: 'Nuevo Cliente' }))
       .expect(201);
 
-    const customer = await prisma.customer.findFirst({ where: { phoneE164: '+5491122334455' } });
+    const customer = await prisma.customer.findFirst({ where: { phoneE164: '+59894567890' } });
     expect(customer?.name).toBe('Nuevo Cliente');
   });
 });
@@ -317,8 +317,8 @@ describe('máquina de estados', () => {
   });
 
   it('cancelar descuenta el pedido de los totales del cliente', async () => {
-    const customer = await createCustomer({ commerceId: commerce.id, phone: '+541133334444' });
-    const order = await createOrder({ customerPhone: '+541133334444' });
+    const customer = await createCustomer({ commerceId: commerce.id, phone: '+59891234567' });
+    const order = await createOrder({ customerPhone: '+59891234567' });
 
     let stats = await prisma.customer.findUnique({ where: { id: customer.id } });
     expect(stats?.ordersCount).toBe(1);
