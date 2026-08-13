@@ -1,6 +1,7 @@
 import {
   ORDER_STATUS_LABELS,
   ORDER_TYPE_LABELS,
+  PAYMENT_STATUS_LABELS,
   type OrderStatus,
   type OrderSummaryDto,
 } from '@autoelite/shared';
@@ -111,6 +112,12 @@ export function BoardPage() {
           <p className="text-sm text-slate-500">
             {totalActive} {totalActive === 1 ? 'pedido activo' : 'pedidos activos'}
             <span className="text-slate-400"> · {data.deliveredCount} entregados</span>
+            {data.awaitingPayment.length > 0 && (
+              <span className="text-amber-700">
+                {' '}
+                · {data.awaitingPayment.length} esperando pago
+              </span>
+            )}
             {isFetching && <span className="ml-2 text-xs text-slate-400">actualizando…</span>}
           </p>
         </div>
@@ -120,6 +127,45 @@ export function BoardPage() {
       </header>
 
       <div className="board-scroll -mx-1 flex min-h-0 flex-1 gap-3 overflow-x-auto px-1 pb-2">
+        {/* Los que esperan pago van aparte y no en "Pendiente": todavía no son
+            trabajo para la cocina, y mezclarlos haría que alguien los tome. */}
+        {data.awaitingPayment.length > 0 && (
+          <section className="flex min-w-[220px] flex-1 flex-col rounded-xl bg-amber-100/70 p-2 ring-1 ring-amber-200">
+            <header className="mb-2 flex items-center justify-between px-1">
+              <h2 className="text-sm font-semibold text-amber-900">Esperando pago</h2>
+              <Badge tone="amber">{data.awaitingPayment.length}</Badge>
+            </header>
+            <div className="board-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+              {data.awaitingPayment.map((order) => (
+                <button
+                  key={order.id}
+                  type="button"
+                  onClick={() => setOpenOrderId(order.id)}
+                  className="rounded-lg border-l-4 border-l-amber-400 bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:shadow-md"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-lg font-bold tabular-nums text-slate-900">
+                      #{order.number}
+                    </span>
+                    <span className="text-xs text-slate-500">{elapsedLabel(order.placedAt)}</span>
+                  </div>
+                  <p className="mt-1 truncate text-sm font-medium text-slate-800">
+                    {order.customerName}
+                  </p>
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <Badge tone={order.paymentStatus === 'PROOF_SUBMITTED' ? 'blue' : 'amber'}>
+                      {PAYMENT_STATUS_LABELS[order.paymentStatus]}
+                    </Badge>
+                    <span className="shrink-0 text-sm font-semibold">
+                      {money(order.totalCents)}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {data.columns.map((column) => (
           <section
             key={column.status}

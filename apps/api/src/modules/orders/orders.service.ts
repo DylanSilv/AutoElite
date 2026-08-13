@@ -1,5 +1,6 @@
 import {
   ACTIVE_ORDER_STATUSES,
+  isAwaitingPayment,
   type CancelOrderInput,
   type CreateOrderInput,
   type OrderBoardDto,
@@ -24,6 +25,14 @@ import { buildPage, decodeCursor } from '../../shared/pagination.js';
 import { tryNormalizePhone } from '../../shared/phone.js';
 import { refreshCustomerStats } from '../customers/customers.service.js';
 import { enqueueOrderMessage, notifyStatusChange } from '../messaging/messaging.service.js';
+import {
+  assertMethodAllowedForType,
+  assertPaymentAllowsProgress,
+  confirmPayment,
+  initialPaymentStatus,
+  rejectPayment,
+  submitPaymentProof,
+} from './orders.payments.js';
 import { orderDetailInclude, orderListInclude, toOrderDto, toOrderSummaryDto } from './orders.mapper.js';
 import { computeLineTotal, computeTotals, type PricedLine } from './orders.pricing.js';
 import {
@@ -246,6 +255,9 @@ export async function createOrder(
   if (input.paymentMethodId && !paymentMethod) {
     throw new ValidationError('El método de pago indicado no existe');
   }
+  if (paymentMethod) assertMethodAllowedForType(paymentMethod, input.type);
+
+  const paymentStatus = initialPaymentStatus(paymentMethod, input.source);
 
   const placedAt = new Date();
   const businessDate = toDateColumn(
@@ -281,6 +293,7 @@ export async function createOrder(
         paymentMethodName: paymentMethod?.name ?? null,
         paidWithCents: input.paidWithCents ?? null,
         isPaid: input.isPaid,
+        paymentStatus,
         subtotalCents: totals.subtotalCents,
         deliveryFeeCents: totals.deliveryFeeCents,
         discountCents: totals.discountCents,
@@ -339,7 +352,14 @@ export async function createOrder(
   // conversacional. En uno tomado por teléfono o en el mostrador, el cliente ya
   // sabe que su pedido entró: el mensaje sobraría.
   if (created.source === 'WHATSAPP' || created.source === 'WEB') {
-    await enqueueOrderMessage(ctx, { order: created, kind: 'ORDER_RECEIVED' });
+    // Si hay que pagar antes, el mensaje útil son las instrucciones de pago,
+    // no un "recibimos tu pedido" que dejaría al cliente esperando sin saber
+    // que la pelota está de su lado.
+    await enqueueOrderMessage(ctx, {
+      order: created,
+      kind: created.paymentStatus === 'PENDING' ? 'PAYMENT_REQUESTED' : 'ORDER_RECEIVED',
+      paymentMethod,
+    });
   }
 
   return toOrderDto(created);
@@ -405,15 +425,21 @@ export async function getBoard(ctx: TenantContext): Promise<OrderBoardDto> {
 
   const summaries = orders.map(toOrderSummaryDto);
 
+  // Los que esperan pago no entraron a la cocina: van aparte, no mezclados con
+  // los pendientes de preparar, para que nadie los tome por error.
+  const awaitingPayment = summaries.filter((order) => isAwaitingPayment(order.paymentStatus));
+  const inKitchen = summaries.filter((order) => !isAwaitingPayment(order.paymentStatus));
+
   // El tablero muestra sólo lo que está en curso: los entregados se cuentan
   // aparte y se consultan en el historial. Así las columnas entran en pantalla
   // sin scroll horizontal, que es como se usa durante el servicio.
   return {
     businessDate,
-    deliveredCount: summaries.filter((order) => order.status === 'ENTREGADO').length,
+    deliveredCount: inKitchen.filter((order) => order.status === 'ENTREGADO').length,
+    awaitingPayment,
     columns: ACTIVE_ORDER_STATUSES.map((status) => ({
       status,
-      orders: summaries.filter((order) => order.status === status),
+      orders: inKitchen.filter((order) => order.status === status),
     })),
   };
 }
@@ -441,6 +467,7 @@ async function applyStatus(
 
   if (options.expectedFrom) assertExpectedStatus(order.status, options.expectedFrom);
   assertTransitionAllowed(order.status, to, order.type);
+  assertPaymentAllowsProgress(order, to);
 
   await ctx.db.order.update({
     where: { id: order.id },
@@ -484,6 +511,44 @@ export function changeStatus(
     expectedFrom: input.from,
     note: input.note,
   });
+}
+
+export async function submitProof(
+  ctx: TenantContext,
+  publicId: string,
+  input: Parameters<typeof submitPaymentProof>[2],
+): Promise<OrderDto> {
+  const order = await findOrThrow(ctx, publicId);
+  await submitPaymentProof(ctx, order, input);
+  return toOrderDto(await findOrThrow(ctx, publicId));
+}
+
+export async function approvePayment(
+  ctx: TenantContext,
+  publicId: string,
+  input: Parameters<typeof confirmPayment>[2],
+): Promise<OrderDto> {
+  const order = await findOrThrow(ctx, publicId);
+  await confirmPayment(ctx, order, input);
+
+  const updated = await findOrThrow(ctx, publicId);
+  await enqueueOrderMessage(ctx, { order: updated, kind: 'PAYMENT_CONFIRMED' });
+
+  return toOrderDto(await findOrThrow(ctx, publicId));
+}
+
+export async function declinePayment(
+  ctx: TenantContext,
+  publicId: string,
+  input: Parameters<typeof rejectPayment>[2],
+): Promise<OrderDto> {
+  const order = await findOrThrow(ctx, publicId);
+  await rejectPayment(ctx, order, input);
+
+  const updated = await findOrThrow(ctx, publicId);
+  await enqueueOrderMessage(ctx, { order: updated, kind: 'PAYMENT_REJECTED' });
+
+  return toOrderDto(await findOrThrow(ctx, publicId));
 }
 
 export function cancelOrder(

@@ -361,6 +361,24 @@ model PaymentMethod {
   code       String
   /// Habilita registrar con cuánto paga el cliente, para calcular el vuelto.
   requiresChangeFor Boolean @default(false)
+
+  /// Exige que el cliente pague antes de que el pedido llegue a la cocina.
+  ///
+  /// Es la diferencia entre "te lo cobro cuando lo retirás" y "pagá y recién
+  /// ahí lo hacemos": sin esto, un pedido por WhatsApp de alguien que no
+  /// aparece nunca deja la comida hecha y perdida.
+  requiresPrepayment Boolean @default(false)
+
+  /// Modalidades en las que se puede usar, como lista de OrderType.
+  /// El efectivo típicamente se limita a retiro y salón.
+  allowedOrderTypes Json?
+
+  /// Instrucciones que se le mandan al cliente para pagar: alias, cuenta,
+  /// titular. Las escribe el comercio; el sistema sólo las transmite.
+  instructions String? @db.Text
+  /// Imagen del QR de Mercado Pago, si el método lo usa.
+  qrImageUrl   String?
+
   isActive          Boolean @default(true)
   sortOrder         Int     @default(0)
 
@@ -400,6 +418,24 @@ enum OrderSource {
   WEB
 }
 
+/// Estado del cobro, independiente del avance en la cocina.
+///
+/// Son dos ejes distintos a propósito: un pedido que se paga contra entrega
+/// tiene que llegar a la cocina igual, y uno prepago no puede llegar aunque el
+/// mostrador quiera apurarlo.
+enum PaymentStatus {
+  /// Se cobra al entregar o en el local: no bloquea nada.
+  NOT_REQUIRED
+  /// Se le pidió el pago al cliente y todavía no llegó.
+  PENDING
+  /// El cliente mandó un comprobante que alguien tiene que mirar.
+  PROOF_SUBMITTED
+  /// Verificado: el pedido puede avanzar.
+  CONFIRMED
+  /// El comprobante no se pudo verificar.
+  REJECTED
+}
+
 model Order {
   id       Int    @id @default(autoincrement())
   publicId String @unique @default(cuid())
@@ -432,6 +468,11 @@ model Order {
   paidWithCents     Int?
   isPaid            Boolean @default(false)
 
+  paymentStatus   PaymentStatus @default(NOT_REQUIRED)
+  paymentNote     String?       @db.Text
+  paidAt          DateTime?
+  paymentReviewedByUserId Int?
+
   subtotalCents    Int
   deliveryFeeCents Int @default(0)
   discountCents    Int @default(0)
@@ -454,12 +495,14 @@ model Order {
   commerce      Commerce             @relation(fields: [commerceId], references: [id], onDelete: Cascade)
   customer      Customer?            @relation(fields: [customerId], references: [id])
   paymentMethod PaymentMethod?       @relation(fields: [paymentMethodId], references: [id])
-  items         OrderItem[]
-  statusHistory OrderStatusHistory[]
-  notifications OutboundMessage[]
+  items          OrderItem[]
+  statusHistory  OrderStatusHistory[]
+  notifications  OutboundMessage[]
+  paymentProofs  PaymentProof[]
 
   @@unique([commerceId, businessDate, number])
   @@unique([commerceId, idempotencyKey])
+  @@index([commerceId, paymentStatus])
   @@index([commerceId, status, placedAt])
   @@index([commerceId, businessDate])
   @@index([commerceId, customerId, placedAt])
@@ -537,6 +580,9 @@ model OrderStatusHistory {
 
 enum MessageKind {
   ORDER_RECEIVED
+  PAYMENT_REQUESTED
+  PAYMENT_CONFIRMED
+  PAYMENT_REJECTED
   ORDER_CONFIRMED
   ORDER_READY_PICKUP
   ORDER_READY_DINE_IN
@@ -588,6 +634,36 @@ model OutboundMessage {
   order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([commerceId, status, createdAt])
+  @@index([orderId])
+}
+
+/// Comprobante de pago enviado por el cliente.
+///
+/// ADVERTENCIA DE DISEÑO: una captura de pantalla no es prueba de pago. Se
+/// falsifica en minutos, así que sirve para que una persona verifique contra la
+/// cuenta real, no para confirmar sola. La confirmación fehaciente llega cuando
+/// el pago lo reporta la pasarela por API, y por eso `paymentStatus` puede
+/// pasar a CONFIRMED sin que exista ningún comprobante acá.
+model PaymentProof {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  orderId    Int
+
+  /// Dónde quedó guardada la imagen.
+  mediaUrl        String?
+  /// Identificador que devuelve WhatsApp, para poder recuperarla del proveedor.
+  whatsappMediaId String?
+  mimeType        String?
+  /// Texto que mandó el cliente junto con el comprobante.
+  note            String? @db.Text
+
+  submittedAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId])
   @@index([orderId])
 }
 

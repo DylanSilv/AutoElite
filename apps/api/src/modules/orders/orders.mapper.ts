@@ -10,6 +10,7 @@ import type {
   OrderItemModifier,
   OrderStatusHistory,
   OutboundMessage,
+  PaymentProof,
 } from '@prisma/client';
 import { formatDateColumn } from '../../shared/business-date.js';
 
@@ -20,6 +21,7 @@ type OrderWithItems = Order & {
 type OrderFull = OrderWithItems & {
   statusHistory: OrderStatusHistory[];
   notifications?: OutboundMessage[];
+  paymentProofs?: PaymentProof[];
 };
 
 export const orderListInclude = {
@@ -30,6 +32,7 @@ export const orderDetailInclude = {
   items: { include: { modifiers: true } },
   statusHistory: { orderBy: { createdAt: 'asc' } },
   notifications: { orderBy: { createdAt: 'asc' } },
+  paymentProofs: { orderBy: { submittedAt: 'asc' } },
 } as const;
 
 function toItemDto(item: OrderItem & { modifiers: OrderItemModifier[] }): OrderItemDto {
@@ -60,6 +63,7 @@ export function toOrderSummaryDto(order: OrderWithItems): OrderSummaryDto {
     discountCents: order.discountCents,
     totalCents: order.totalCents,
     isPaid: order.isPaid,
+    paymentStatus: order.paymentStatus,
     placedAt: order.placedAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
   };
@@ -82,6 +86,15 @@ export function toOrderDto(order: OrderFull): OrderDto {
       : null,
     paymentMethodName: order.paymentMethodName,
     paidWithCents: order.paidWithCents,
+    paymentNote: order.paymentNote,
+    paidAt: order.paidAt?.toISOString() ?? null,
+    paymentProofs: (order.paymentProofs ?? []).map((proof) => ({
+      id: proof.publicId,
+      mediaUrl: proof.mediaUrl,
+      mimeType: proof.mimeType,
+      note: proof.note,
+      submittedAt: proof.submittedAt.toISOString(),
+    })),
     notes: order.notes,
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
     cancelReason: order.cancelReason,

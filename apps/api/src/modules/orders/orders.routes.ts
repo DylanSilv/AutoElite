@@ -5,6 +5,9 @@ import {
   cursorPaginationSchema,
   orderFiltersSchema,
   quoteOrderSchema,
+  rejectPaymentSchema,
+  reviewPaymentSchema,
+  submitPaymentProofSchema,
 } from '@autoelite/shared';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -56,6 +59,38 @@ ordersRouter.post<IdParams>(
   validate({ params: idParams, body: changeStatusSchema }),
   async (req, res) => {
     res.json(await service.changeStatus(getTenantContext(req), req.params.id, req.body));
+  },
+);
+
+/**
+ * Comprobante que manda el cliente.
+ *
+ * Lo usa el agente al recibir la imagen por WhatsApp, y también puede cargarlo
+ * el personal si el cliente lo mandó por otro lado.
+ */
+ordersRouter.post<IdParams>(
+  '/:id/payment/proof',
+  validate({ params: idParams, body: submitPaymentProofSchema }),
+  async (req, res) => {
+    res.json(await service.submitProof(getTenantContext(req), req.params.id, req.body));
+  },
+);
+
+// Confirmar y rechazar exigen una persona: la validación está en el servicio,
+// porque es una regla del negocio y no del transporte.
+ordersRouter.post<IdParams>(
+  '/:id/payment/confirm',
+  validate({ params: idParams, body: reviewPaymentSchema }),
+  async (req, res) => {
+    res.json(await service.approvePayment(getTenantContext(req), req.params.id, req.body));
+  },
+);
+
+ordersRouter.post<IdParams>(
+  '/:id/payment/reject',
+  validate({ params: idParams, body: rejectPaymentSchema }),
+  async (req, res) => {
+    res.json(await service.declinePayment(getTenantContext(req), req.params.id, req.body));
   },
 );
 

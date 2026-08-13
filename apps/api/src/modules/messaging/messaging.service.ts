@@ -1,4 +1,4 @@
-import { type MessageKind, type Order, Prisma } from '@prisma/client';
+import { type MessageKind, type Order, type PaymentMethod, Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma.js';
 import type { TenantContext } from '../../http/context.js';
 import { logger } from '../../shared/logger.js';
@@ -27,6 +27,8 @@ const MAX_ATTEMPTS = 4;
 interface EnqueueInput {
   order: Order;
   kind: MessageKind;
+  /** Necesario para el aviso de cobro: lleva alias, cuenta y QR. */
+  paymentMethod?: PaymentMethod | null;
 }
 
 /**
@@ -35,7 +37,7 @@ interface EnqueueInput {
  */
 export async function enqueueOrderMessage(
   ctx: TenantContext,
-  { order, kind }: EnqueueInput,
+  { order, kind, paymentMethod }: EnqueueInput,
 ): Promise<void> {
   try {
     if (!order.customerPhone) return;
@@ -51,6 +53,13 @@ export async function enqueueOrderMessage(
         currency: ctx.commerce.currency,
         address: null,
       },
+      paymentMethod: paymentMethod
+        ? {
+            name: paymentMethod.name,
+            instructions: paymentMethod.instructions,
+            qrImageUrl: paymentMethod.qrImageUrl,
+          }
+        : null,
     });
 
     const skipReason = resolveSkipReason(customer);

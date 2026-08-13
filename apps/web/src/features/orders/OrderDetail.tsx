@@ -2,14 +2,30 @@ import {
   MESSAGE_STATUS_LABELS,
   ORDER_STATUS_LABELS,
   ORDER_TYPE_LABELS,
+  PAYMENT_STATUS_LABELS,
   type MessageStatus,
   type OrderStatus,
+  type PaymentStatus,
 } from '@autoelite/shared';
 import { useState } from 'react';
 import { Badge, Button, Card, ErrorMessage, Input, Spinner } from '@/components/ui';
 import { dateTime, money, time } from '@/lib/format';
-import { useCancelOrder, useChangeStatus, useOrder } from './orders.api';
+import {
+  useCancelOrder,
+  useChangeStatus,
+  useConfirmPayment,
+  useOrder,
+  useRejectPayment,
+} from './orders.api';
 import { STATUS_TONE, TRANSITION_LABEL, TYPE_ICON } from './order-visuals';
+
+const PAYMENT_TONE: Record<PaymentStatus, 'slate' | 'emerald' | 'red' | 'amber' | 'blue'> = {
+  NOT_REQUIRED: 'slate',
+  PENDING: 'amber',
+  PROOF_SUBMITTED: 'blue',
+  CONFIRMED: 'emerald',
+  REJECTED: 'red',
+};
 
 /** El estado del aviso se lee de un vistazo: verde llegó, ámbar no salió. */
 const NOTIFICATION_TONE: Record<MessageStatus, 'slate' | 'emerald' | 'red' | 'amber'> = {
@@ -32,8 +48,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const { data: order, isLoading, error } = useOrder(orderId);
   const changeStatus = useChangeStatus();
   const cancelOrder = useCancelOrder();
+  const confirmPayment = useConfirmPayment();
+  const rejectPayment = useRejectPayment();
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectNote, setRejectNote] = useState('');
 
   if (isLoading) return <div className="flex justify-center py-10"><Spinner /></div>;
   if (error) return <ErrorMessage error={error} />;
@@ -47,8 +67,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
   return (
     <div className="space-y-4">
-      {(changeStatus.error || cancelOrder.error) && (
-        <ErrorMessage error={changeStatus.error ?? cancelOrder.error} />
+      {(changeStatus.error || cancelOrder.error || confirmPayment.error || rejectPayment.error) && (
+        <ErrorMessage
+          error={
+            changeStatus.error ?? cancelOrder.error ?? confirmPayment.error ?? rejectPayment.error
+          }
+        />
       )}
 
       <Card className="p-4">
@@ -184,6 +208,95 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                 </Button>
               </div>
             </div>
+          )}
+        </Card>
+      )}
+
+      {order.paymentStatus !== 'NOT_REQUIRED' && (
+        <Card className="p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-900">Cobro</h3>
+            <Badge tone={PAYMENT_TONE[order.paymentStatus]}>
+              {PAYMENT_STATUS_LABELS[order.paymentStatus]}
+            </Badge>
+          </div>
+
+          {order.paymentNote && <p className="mb-2 text-sm text-slate-600">{order.paymentNote}</p>}
+
+          {order.paymentProofs.length === 0 ? (
+            <p className="text-sm text-slate-500">El cliente todavía no mandó el comprobante.</p>
+          ) : (
+            <ul className="space-y-2">
+              {order.paymentProofs.map((proof) => (
+                <li key={proof.id} className="rounded-lg bg-slate-50 p-2">
+                  {proof.mediaUrl ? (
+                    <a href={proof.mediaUrl} target="_blank" rel="noreferrer">
+                      <img
+                        src={proof.mediaUrl}
+                        alt="Comprobante enviado por el cliente"
+                        className="max-h-56 w-auto rounded ring-1 ring-slate-200"
+                      />
+                    </a>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Comprobante recibido por WhatsApp (imagen pendiente de descarga)
+                    </p>
+                  )}
+                  {proof.note && <p className="mt-1 text-xs text-slate-600">{proof.note}</p>}
+                  <p className="mt-1 text-xs text-slate-400">{time(proof.submittedAt)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {order.paymentStatus !== 'CONFIRMED' && (
+            <>
+              {/* Una captura se falsifica en minutos: quien confirma tiene que
+                  haber mirado la cuenta, no sólo la imagen. */}
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
+                Verificá el ingreso en la cuenta antes de confirmar. Una captura no es prueba de pago.
+              </p>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="success"
+                  disabled={confirmPayment.isPending}
+                  onClick={() => confirmPayment.mutate({ id: order.id })}
+                >
+                  Confirmar pago
+                </Button>
+                {!rejecting && (
+                  <Button variant="secondary" onClick={() => setRejecting(true)}>
+                    Rechazar
+                  </Button>
+                )}
+              </div>
+
+              {rejecting && (
+                <div className="mt-3 space-y-2">
+                  <Input
+                    autoFocus
+                    placeholder="Por qué no se pudo verificar"
+                    value={rejectNote}
+                    onChange={(e) => setRejectNote(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="danger"
+                      disabled={!rejectNote.trim() || rejectPayment.isPending}
+                      onClick={() =>
+                        rejectPayment.mutate({ id: order.id, note: rejectNote.trim() })
+                      }
+                    >
+                      Rechazar pago
+                    </Button>
+                    <Button variant="ghost" onClick={() => setRejecting(false)}>
+                      Volver
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </Card>
       )}

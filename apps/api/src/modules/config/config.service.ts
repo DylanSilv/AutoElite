@@ -27,6 +27,12 @@ function toPaymentMethodDto(method: PaymentMethod): PaymentMethodDto {
     name: method.name,
     code: method.code,
     requiresChangeFor: method.requiresChangeFor,
+    requiresPrepayment: method.requiresPrepayment,
+    allowedOrderTypes: Array.isArray(method.allowedOrderTypes)
+      ? (method.allowedOrderTypes as string[])
+      : null,
+    instructions: method.instructions,
+    qrImageUrl: method.qrImageUrl,
     isActive: method.isActive,
     sortOrder: method.sortOrder,
   };

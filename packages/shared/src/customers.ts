@@ -109,6 +109,13 @@ export const createPaymentMethodSchema = z.object({
     .toUpperCase()
     .regex(/^[A-Z0-9_]+$/, 'Sólo letras, números y guión bajo'),
   requiresChangeFor: z.boolean().default(false),
+  /** Exige que el cliente pague antes de que el pedido llegue a la cocina. */
+  requiresPrepayment: z.boolean().default(false),
+  /** Modalidades donde se puede usar. Vacío o ausente = todas. */
+  allowedOrderTypes: z.array(z.enum(['DINE_IN', 'TAKEAWAY', 'DELIVERY'])).optional(),
+  /** Alias, cuenta y titular que el agente le manda al cliente. */
+  instructions: z.string().max(1000).trim().optional(),
+  qrImageUrl: z.string().url().max(500).optional(),
   sortOrder: z.number().int().min(0).max(9999).default(0),
 });
 export type CreatePaymentMethodInput = z.infer<typeof createPaymentMethodSchema>;
@@ -124,6 +131,10 @@ export interface PaymentMethodDto {
   name: string;
   code: string;
   requiresChangeFor: boolean;
+  requiresPrepayment: boolean;
+  allowedOrderTypes: string[] | null;
+  instructions: string | null;
+  qrImageUrl: string | null;
   isActive: boolean;
   sortOrder: number;
 }

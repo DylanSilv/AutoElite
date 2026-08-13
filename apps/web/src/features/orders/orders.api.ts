@@ -94,6 +94,24 @@ export function useChangeStatus() {
   });
 }
 
+export function useConfirmPayment() {
+  const invalidate = useOrderInvalidation();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string }) =>
+      api.post<OrderDto>(`/orders/${id}/payment/confirm`, { note }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRejectPayment() {
+  const invalidate = useOrderInvalidation();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) =>
+      api.post<OrderDto>(`/orders/${id}/payment/reject`, { note }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useCancelOrder() {
   const invalidate = useOrderInvalidation();
   return useMutation({

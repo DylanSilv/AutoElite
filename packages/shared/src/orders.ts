@@ -18,6 +18,39 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const ORDER_SOURCES = ['PANEL', 'WHATSAPP', 'PHONE', 'WEB'] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
 
+export const PAYMENT_STATUSES = [
+  'NOT_REQUIRED',
+  'PENDING',
+  'PROOF_SUBMITTED',
+  'CONFIRMED',
+  'REJECTED',
+] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  NOT_REQUIRED: 'Paga al recibir',
+  PENDING: 'Esperando pago',
+  PROOF_SUBMITTED: 'Comprobante a verificar',
+  CONFIRMED: 'Pago confirmado',
+  REJECTED: 'Pago rechazado',
+};
+
+/**
+ * Estados en los que el pedido todavía no puede llegar a la cocina.
+ *
+ * Es el corazón del cobro previo: mientras el pago no esté verificado, el
+ * pedido existe pero no se prepara.
+ */
+export const BLOCKING_PAYMENT_STATUSES: PaymentStatus[] = [
+  'PENDING',
+  'PROOF_SUBMITTED',
+  'REJECTED',
+];
+
+export function isAwaitingPayment(status: PaymentStatus): boolean {
+  return BLOCKING_PAYMENT_STATUSES.includes(status);
+}
+
 /** Estados que siguen "vivos" para la cocina y el mostrador. */
 export const ACTIVE_ORDER_STATUSES: OrderStatus[] = [
   'PENDIENTE',
@@ -124,6 +157,25 @@ export const changeStatusSchema = z.object({
 });
 export type ChangeStatusInput = z.infer<typeof changeStatusSchema>;
 
+/** Comprobante que manda el cliente. Lo usa el agente al recibir la imagen. */
+export const submitPaymentProofSchema = z.object({
+  mediaUrl: z.string().url().max(500).optional(),
+  whatsappMediaId: z.string().max(200).optional(),
+  mimeType: z.string().max(100).optional(),
+  note: z.string().max(500).trim().optional(),
+});
+export type SubmitPaymentProofInput = z.infer<typeof submitPaymentProofSchema>;
+
+export const reviewPaymentSchema = z.object({
+  note: z.string().max(300).trim().optional(),
+});
+export type ReviewPaymentInput = z.infer<typeof reviewPaymentSchema>;
+
+export const rejectPaymentSchema = z.object({
+  note: z.string().min(1, 'Indicá por qué no se pudo verificar el pago').max(300).trim(),
+});
+export type RejectPaymentInput = z.infer<typeof rejectPaymentSchema>;
+
 export const cancelOrderSchema = z.object({
   reason: z.string().min(1, 'Cancelar requiere un motivo').max(300).trim(),
 });
@@ -197,6 +249,14 @@ export interface OrderStatusHistoryDto {
   createdAt: string;
 }
 
+export interface PaymentProofDto {
+  id: string;
+  mediaUrl: string | null;
+  mimeType: string | null;
+  note: string | null;
+  submittedAt: string;
+}
+
 export interface OrderSummaryDto extends OrderTotals {
   id: string;
   number: number;
@@ -209,6 +269,7 @@ export interface OrderSummaryDto extends OrderTotals {
   placedAt: string;
   updatedAt: string;
   isPaid: boolean;
+  paymentStatus: PaymentStatus;
 }
 
 export interface OrderDto extends OrderSummaryDto {
@@ -227,6 +288,9 @@ export interface OrderDto extends OrderSummaryDto {
   notes: string | null;
   scheduledFor: string | null;
   cancelReason: string | null;
+  paymentNote: string | null;
+  paidAt: string | null;
+  paymentProofs: PaymentProofDto[];
   items: OrderItemDto[];
   statusHistory: OrderStatusHistoryDto[];
   notifications: OrderNotificationDto[];
@@ -238,6 +302,8 @@ export interface OrderBoardDto {
   businessDate: string;
   /** Entregados del día: se cuentan, pero no ocupan una columna del tablero. */
   deliveredCount: number;
+  /** Pedidos que esperan pago: no entraron a la cocina todavía. */
+  awaitingPayment: OrderSummaryDto[];
   columns: { status: OrderStatus; orders: OrderSummaryDto[] }[];
 }
 

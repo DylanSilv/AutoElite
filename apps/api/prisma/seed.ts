@@ -144,11 +144,54 @@ const DELIVERY_ZONES = [
 ];
 
 const PAYMENT_METHODS = [
-  { name: 'Efectivo', code: 'CASH', requiresChangeFor: true },
-  { name: 'Transferencia', code: 'TRANSFER', requiresChangeFor: false },
-  { name: 'Débito', code: 'DEBIT', requiresChangeFor: false },
-  { name: 'Crédito', code: 'CREDIT', requiresChangeFor: false },
-  { name: 'Mercado Pago', code: 'MP', requiresChangeFor: false },
+  {
+    name: 'Efectivo',
+    code: 'CASH',
+    requiresChangeFor: true,
+    requiresPrepayment: false,
+    // Sólo en el local: cobrar efectivo en un envío implica que el cadete
+    // maneje plata y vuelto.
+    allowedOrderTypes: ['DINE_IN', 'TAKEAWAY'],
+    instructions: null,
+    qrImageUrl: null,
+  },
+  {
+    name: 'Transferencia',
+    code: 'TRANSFER',
+    requiresChangeFor: false,
+    requiresPrepayment: true,
+    allowedOrderTypes: undefined,
+    instructions:
+      'Transferí a:\nBROU · Caja de ahorro 001234567-00001\nTitular: La Napolitana SRL\nRUT: 21-999999-0018',
+    qrImageUrl: null,
+  },
+  {
+    name: 'Mercado Pago',
+    code: 'MP',
+    requiresChangeFor: false,
+    requiresPrepayment: true,
+    allowedOrderTypes: undefined,
+    instructions: 'Escaneá el QR o pagá al alias: lanapolitana.mvd',
+    qrImageUrl: null,
+  },
+  {
+    name: 'Débito',
+    code: 'DEBIT',
+    requiresChangeFor: false,
+    requiresPrepayment: false,
+    allowedOrderTypes: ['DINE_IN', 'TAKEAWAY'],
+    instructions: null,
+    qrImageUrl: null,
+  },
+  {
+    name: 'Crédito',
+    code: 'CREDIT',
+    requiresChangeFor: false,
+    requiresPrepayment: false,
+    allowedOrderTypes: ['DINE_IN', 'TAKEAWAY'],
+    instructions: null,
+    qrImageUrl: null,
+  },
 ];
 
 const CUSTOMERS = [
@@ -517,6 +560,7 @@ async function main(): Promise<void> {
         paymentMethodId: paymentMethod.id,
         paymentMethodName: paymentMethod.name,
         isPaid: status === 'ENTREGADO',
+        paymentStatus: status === 'ENTREGADO' ? 'CONFIRMED' : 'NOT_REQUIRED',
         subtotalCents: totals.subtotalCents,
         deliveryFeeCents: totals.deliveryFeeCents,
         discountCents: totals.discountCents,
@@ -596,6 +640,66 @@ async function main(): Promise<void> {
   for (const [index, status] of liveStatuses.entries()) {
     const placedAt = new Date(now.getTime() - (liveStatuses.length - index) * 7 * 60 * 1000);
     await createSeedOrder(placedAt, status);
+  }
+
+  // Dos pedidos que llegaron por WhatsApp y están esperando el pago: uno sin
+  // comprobante todavía y otro con comprobante a verificar. Es lo que hace
+  // visible el flujo de cobro previo en la demostración.
+  const transfer = paymentMethods.find((m) => m.code === 'TRANSFER')!;
+  for (const [index, paymentStatus] of (['PENDING', 'PROOF_SUBMITTED'] as const).entries()) {
+    const placedAt = new Date(now.getTime() - (index + 1) * 4 * 60 * 1000);
+    const businessDate = businessDateOf(placedAt, TIMEZONE, CUTOFF);
+    const customer = customers[index]!;
+    const variant = pizzaVariants[index]!;
+
+    const order = await prisma.order.create({
+      data: {
+        commerceId: commerce.id,
+        number: nextNumber(businessDate),
+        businessDate: toDateColumn(businessDate),
+        type: 'TAKEAWAY',
+        status: 'PENDIENTE',
+        source: 'WHATSAPP',
+        customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phoneE164,
+        paymentMethodId: transfer.id,
+        paymentMethodName: transfer.name,
+        paymentStatus,
+        subtotalCents: variant.priceCents,
+        deliveryFeeCents: 0,
+        discountCents: 0,
+        totalCents: variant.priceCents,
+        placedAt,
+        items: {
+          create: {
+            commerceId: commerce.id,
+            productId: variant.productId,
+            variantId: variant.id,
+            productName: variant.productName,
+            variantName: variant.name,
+            unitPriceCents: variant.priceCents,
+            quantity: 1,
+            lineTotalCents: variant.priceCents,
+          },
+        },
+        statusHistory: {
+          create: { commerceId: commerce.id, fromStatus: null, toStatus: 'PENDIENTE' },
+        },
+      },
+    });
+
+    if (paymentStatus === 'PROOF_SUBMITTED') {
+      await prisma.paymentProof.create({
+        data: {
+          commerceId: commerce.id,
+          orderId: order.id,
+          whatsappMediaId: 'wamid.demo',
+          mimeType: 'image/jpeg',
+          note: 'Transferencia realizada',
+        },
+      });
+    }
   }
 
   // El contador tiene que quedar donde lo dejó el seed: si no, el primer pedido

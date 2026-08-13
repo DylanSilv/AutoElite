@@ -12,6 +12,12 @@ import type { MessageKind, Order, OrderStatus, OrderType } from '@prisma/client'
  * inventado genera más reclamos que no decir nada.
  */
 
+export interface PaymentInstructions {
+  name: string;
+  instructions: string | null;
+  qrImageUrl: string | null;
+}
+
 export interface MessageContext {
   order: Pick<
     Order,
@@ -22,8 +28,10 @@ export interface MessageContext {
     | 'deliveryStreet'
     | 'deliveryNumber'
     | 'cancelReason'
+    | 'paymentNote'
   >;
   commerce: { name: string; currency: string; address?: string | null };
+  paymentMethod?: PaymentInstructions | null;
 }
 
 /** Primer nombre: "Hola Martina" suena mejor que "Hola Martina Silva". */
@@ -71,6 +79,34 @@ export function buildMessageBody(kind: MessageKind, ctx: MessageContext): string
   const numero = `#${order.number}`;
 
   switch (kind) {
+    case 'PAYMENT_REQUESTED': {
+      const method = ctx.paymentMethod;
+      // Las instrucciones las escribe el comercio: alias, cuenta, titular. El
+      // sistema sólo las transmite, no las inventa.
+      const datos = method?.instructions ? `\n\n${method.instructions}` : '';
+      const qr = method?.qrImageUrl ? `\n\nQR para pagar: ${method.qrImageUrl}` : '';
+      return (
+        `${hola} Tomamos tu pedido ${numero} en ${commerce.name}.\n` +
+        `Total a pagar: ${total}${method ? `\nMedio: ${method.name}` : ''}` +
+        datos +
+        qr +
+        '\n\nCuando lo pagues, mandanos la captura del comprobante por acá y lo ponemos en marcha 👍'
+      );
+    }
+
+    case 'PAYMENT_CONFIRMED':
+      return (
+        `${hola} Confirmamos el pago de tu pedido ${numero} ✅\n` +
+        'Ya lo estamos preparando. Te avisamos cuando esté.'
+      );
+
+    case 'PAYMENT_REJECTED':
+      return (
+        `${hola} No pudimos verificar el pago de tu pedido ${numero}.\n` +
+        (order.paymentNote ? `${order.paymentNote}\n` : '') +
+        '¿Nos reenviás el comprobante? Si ya pagaste, escribinos y lo revisamos.'
+      );
+
     case 'ORDER_RECEIVED':
       return (
         `${hola} Recibimos tu pedido ${numero} en ${commerce.name}.\n` +

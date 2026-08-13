@@ -39,6 +39,7 @@ const TENANT_MODELS = new Set<string>([
   'OrderItemModifier',
   'OrderStatusHistory',
   'OutboundMessage',
+  'PaymentProof',
 ]);
 
 /** Operaciones cuyo `where` acota qué filas se leen o se tocan. */
