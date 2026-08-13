@@ -61,6 +61,25 @@ pnpm dev:web    # panel en http://localhost:5173
 usuario y la contraseña de acceso. Se puede volver a correr cuando se quiera: limpia y recarga sólo
 los datos operativos del comercio de demostración.
 
+### Si algo falla
+
+**`bind: address already in use` en el puerto 3306** — ya hay un MySQL corriendo en tu máquina. No
+hace falta apagarlo: cambiá en el `.env` el puerto por el que se publica el contenedor.
+
+```bash
+MYSQL_PORT=3307
+DATABASE_URL="mysql://root:root@localhost:3307/autoelite"
+```
+
+Después `docker compose down && pnpm db:up`. Para ver qué lo está ocupando:
+`lsof -nP -i:3306 | grep LISTEN`.
+
+**`Can't reach database server`** — el contenedor todavía está arrancando. MySQL tarda unos segundos
+la primera vez; reintentá `pnpm db:setup`.
+
+**El panel carga pero no hay datos** — falta correr `pnpm db:setup`, o la API no está levantada en
+otra terminal.
+
 Para los tests hace falta una base aparte y su propio `.env.test`:
 
 ```bash
