@@ -45,16 +45,21 @@ Requiere Node 20+, pnpm y Docker (o un MySQL 8 accesible).
 
 ```bash
 pnpm install
-cp .env.example .env          # completar DATABASE_URL y los secretos
-pnpm db:up                    # levanta MySQL con docker compose
-pnpm --filter @autoelite/api db:migrate
-pnpm --filter @autoelite/api db:seed
-pnpm dev                      # API en :3000
-pnpm --filter @autoelite/web dev   # panel en :5173
+cp .env.example .env    # sirve tal cual para desarrollo local
+pnpm db:up              # levanta MySQL con docker compose
+pnpm db:setup           # genera el cliente, migra y carga los datos de demo
 ```
 
-El seed carga el menú, las zonas, los clientes y dos semanas de historial, e imprime en consola el
-usuario y la contraseña de acceso.
+Después, en dos terminales:
+
+```bash
+pnpm dev        # API en http://localhost:3000
+pnpm dev:web    # panel en http://localhost:5173
+```
+
+`db:setup` carga el menú, las zonas, los clientes y dos semanas de historial, e imprime en consola el
+usuario y la contraseña de acceso. Se puede volver a correr cuando se quiera: limpia y recarga sólo
+los datos operativos del comercio de demostración.
 
 Para los tests hace falta una base aparte y su propio `.env.test`:
 
