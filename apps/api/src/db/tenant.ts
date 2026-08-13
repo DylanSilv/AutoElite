@@ -12,13 +12,32 @@ import { prisma } from './prisma.js';
  * deja de ser posible por construcción.
  *
  * El `commerceId` sale siempre del token, nunca de la URL ni del body.
+ *
+ * LÍMITE IMPORTANTE: la extensión sólo alcanza los argumentos del modelo raíz
+ * de cada operación. En una escritura anidada (`product.create` con
+ * `variants: { create: [...] }`) las filas hijas NO reciben el `commerceId`
+ * automáticamente y hay que pasarlo explícito. Por eso los modelos hijos lo
+ * declaran como obligatorio: así el compilador obliga a completarlo en vez de
+ * dejar filas huérfanas de comercio.
  */
 
 /** Modelos con columna `commerceId`. Agregar acá cada modelo nuevo del negocio. */
 const TENANT_MODELS = new Set<string>([
   'User',
   'ApiClient',
-  // Etapas siguientes: Category, Product, Customer, Order, PaymentMethod, ...
+  'Category',
+  'Product',
+  'ProductVariant',
+  'ModifierGroup',
+  'ModifierOption',
+  'Customer',
+  'CustomerAddress',
+  'DeliveryZone',
+  'PaymentMethod',
+  'Order',
+  'OrderItem',
+  'OrderItemModifier',
+  'OrderStatusHistory',
 ]);
 
 /** Operaciones cuyo `where` acota qué filas se leen o se tocan. */

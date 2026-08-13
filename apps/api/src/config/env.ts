@@ -8,8 +8,13 @@ const repoRoot = path.resolve(here, '../../../..');
 
 // El .env vive en la raíz del monorepo para que la API y las herramientas de
 // Prisma lean exactamente los mismos valores.
-for (const candidate of ['.env.test', '.env']) {
-  if (process.env.NODE_ENV === 'test' && candidate !== '.env.test') continue;
+//
+// En tests se prefiere .env.test y se cae a .env; fuera de tests NUNCA se lee
+// .env.test, para que una tarea de desarrollo no termine escribiendo en la base
+// de pruebas.
+const envCandidates = process.env.NODE_ENV === 'test' ? ['.env.test', '.env'] : ['.env'];
+
+for (const candidate of envCandidates) {
   const file = path.join(repoRoot, candidate);
   if (existsSync(file)) {
     process.loadEnvFile(file);

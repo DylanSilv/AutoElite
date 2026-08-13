@@ -14,10 +14,113 @@ function unique(prefix: string): string {
 
 /** Deja la base vacía respetando el orden de las claves foráneas. */
 export async function resetDatabase(): Promise<void> {
+  await prisma.orderItemModifier.deleteMany();
+  await prisma.orderItem.deleteMany();
+  await prisma.orderStatusHistory.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.$executeRaw`DELETE FROM OrderCounter`;
+  await prisma.customerAddress.deleteMany();
+  await prisma.customer.deleteMany();
+  await prisma.productModifierGroup.deleteMany();
+  await prisma.productVariant.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.modifierOption.deleteMany();
+  await prisma.modifierGroup.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.deliveryZone.deleteMany();
+  await prisma.paymentMethod.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.apiClient.deleteMany();
   await prisma.user.deleteMany();
   await prisma.commerce.deleteMany();
+}
+
+/**
+ * Catálogo mínimo pero completo: una pizza con tres tamaños, una bebida, un
+ * grupo de extras, una zona de envío y un método de pago.
+ */
+export async function createCatalog(commerceId: number) {
+  const category = await prisma.category.create({
+    data: { commerceId, name: `Pizzas ${unique('cat')}` },
+  });
+
+  const extras = await prisma.modifierGroup.create({
+    data: {
+      commerceId,
+      name: `Extras ${unique('mod')}`,
+      minSelect: 0,
+      maxSelect: 3,
+      options: {
+        create: [
+          { commerceId, name: 'Huevo', priceDeltaCents: 90_000 },
+          { commerceId, name: 'Jamón', priceDeltaCents: 150_000 },
+        ],
+      },
+    },
+    include: { options: true },
+  });
+
+  const pizza = await prisma.product.create({
+    data: {
+      commerceId,
+      categoryId: category.id,
+      name: 'Muzzarella',
+      variants: {
+        create: [
+          { commerceId, name: 'Chica', priceCents: 850_000, sortOrder: 0 },
+          { commerceId, name: 'Grande', priceCents: 1_450_000, sortOrder: 1 },
+        ],
+      },
+      modifierGroups: { create: { modifierGroupId: extras.id } },
+    },
+    include: { variants: true },
+  });
+
+  const drink = await prisma.product.create({
+    data: {
+      commerceId,
+      categoryId: category.id,
+      name: 'Coca-Cola 1,5L',
+      variants: { create: { commerceId, name: 'Única', priceCents: 350_000 } },
+    },
+    include: { variants: true },
+  });
+
+  const zone = await prisma.deliveryZone.create({
+    data: { commerceId, name: `Centro ${unique('zona')}`, feeCents: 150_000, estimatedMin: 25 },
+  });
+
+  const paymentMethod = await prisma.paymentMethod.create({
+    data: { commerceId, name: 'Efectivo', code: `CASH_${unique('pm')}`, requiresChangeFor: true },
+  });
+
+  return {
+    category,
+    extras,
+    pizza,
+    pizzaChica: pizza.variants.find((v) => v.name === 'Chica')!,
+    pizzaGrande: pizza.variants.find((v) => v.name === 'Grande')!,
+    drink,
+    drinkVariant: drink.variants[0]!,
+    zone,
+    paymentMethod,
+  };
+}
+
+export async function createCustomer(options: { commerceId: number; phone?: string; name?: string }) {
+  return prisma.customer.create({
+    data: {
+      commerceId: options.commerceId,
+      name: options.name ?? 'Cliente de prueba',
+      phoneE164: options.phone ?? `+54911${String(Math.floor(random8()))}`,
+      phoneRaw: options.phone ?? null,
+    },
+  });
+}
+
+function random8(): number {
+  sequence += 1;
+  return 10_000_000 + sequence;
 }
 
 export async function createCommerce(name = 'Pizzería de prueba') {

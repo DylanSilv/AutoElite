@@ -39,8 +39,15 @@ model Commerce {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users      User[]
-  apiClients ApiClient[]
+  users          User[]
+  apiClients     ApiClient[]
+  categories     Category[]
+  products       Product[]
+  modifierGroups ModifierGroup[]
+  customers      Customer[]
+  deliveryZones  DeliveryZone[]
+  paymentMethods PaymentMethod[]
+  orders         Order[]
 }
 
 enum UserRole {
@@ -119,4 +126,402 @@ model ApiClient {
   commerce Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
 
   @@index([commerceId])
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo
+// ---------------------------------------------------------------------------
+
+model Category {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  sortOrder  Int     @default(0)
+  isActive   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce Commerce  @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([commerceId, name])
+  @@index([commerceId, isActive, sortOrder])
+}
+
+/// El concepto comercial ("Muzzarella"). El precio vive en las variantes.
+model Product {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId  Int
+  categoryId  Int
+  name        String
+  description String? @db.Text
+  imageUrl    String?
+  /// Cortar un producto entero: "hoy no hay napolitana".
+  isAvailable Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  commerce       Commerce               @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  category       Category               @relation(fields: [categoryId], references: [id])
+  variants       ProductVariant[]
+  modifierGroups ProductModifierGroup[]
+  orderItems     OrderItem[]
+
+  @@index([commerceId, categoryId, isAvailable])
+  @@index([commerceId, name])
+}
+
+/// Lo que realmente se vende y tiene precio. Todo producto tiene al menos una,
+/// aunque se llame "Única": así el pedido siempre referencia una variante y no
+/// hay dos caminos de código.
+model ProductVariant {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  productId  Int
+  name       String
+  priceCents Int
+  /// Cortar sólo un tamaño: "se acabó la masa grande".
+  isAvailable Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@unique([productId, name])
+  @@index([commerceId])
+  @@index([productId, isAvailable])
+}
+
+/// Extras y opciones. Se definen a nivel comercio y se asocian a productos,
+/// para no repetir "Extras de pizza" en veinte productos.
+model ModifierGroup {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  minSelect  Int     @default(0)
+  maxSelect  Int     @default(1)
+  isActive   Boolean @default(true)
+  sortOrder  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce Commerce               @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  options  ModifierOption[]
+  products ProductModifierGroup[]
+
+  @@unique([commerceId, name])
+}
+
+model ModifierOption {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId      Int
+  modifierGroupId Int
+  name            String
+  priceDeltaCents Int     @default(0)
+  isAvailable     Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  group ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([modifierGroupId, name])
+  @@index([commerceId])
+}
+
+model ProductModifierGroup {
+  productId       Int
+  modifierGroupId Int
+  sortOrder       Int @default(0)
+
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  group   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@id([productId, modifierGroupId])
+}
+
+// ---------------------------------------------------------------------------
+// Clientes y configuración operativa
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  /// Identidad del cliente, normalizada a E.164. En la fase 2 WhatsApp entrega
+  /// el número en este formato: si acá se guardara lo que tipeó el operador, el
+  /// agente no podría reconocer a un cliente ya existente.
+  phoneE164  String
+  phoneRaw   String?
+  notes      String? @db.Text
+
+  /// Denormalizado a propósito: evita un GROUP BY sobre todo el historial cada
+  /// vez que se abre una ficha. Se recalcula al confirmar o cancelar un pedido.
+  ordersCount     Int       @default(0)
+  totalSpentCents Int       @default(0)
+  lastOrderAt     DateTime?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce  Commerce          @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  addresses CustomerAddress[]
+  orders    Order[]
+
+  @@unique([commerceId, phoneE164])
+  @@index([commerceId, name])
+}
+
+model CustomerAddress {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId     Int
+  customerId     Int
+  label          String?
+  street         String
+  number         String?
+  apartment      String?
+  neighborhood   String?
+  city           String?
+  /// "portón verde, timbre 2": lo que el cadete necesita de verdad.
+  reference      String? @db.Text
+  deliveryZoneId Int?
+  isDefault      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  deliveryZone DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+
+  @@index([commerceId])
+  @@index([customerId])
+}
+
+model DeliveryZone {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId   Int
+  name         String
+  feeCents     Int
+  estimatedMin Int?
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce  Commerce          @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  addresses CustomerAddress[]
+
+  @@unique([commerceId, name])
+}
+
+model PaymentMethod {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  code       String
+  /// Habilita registrar con cuánto paga el cliente, para calcular el vuelto.
+  requiresChangeFor Boolean @default(false)
+  isActive          Boolean @default(true)
+  sortOrder         Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@unique([commerceId, code])
+}
+
+// ---------------------------------------------------------------------------
+// Pedidos
+// ---------------------------------------------------------------------------
+
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+}
+
+enum OrderStatus {
+  PENDIENTE
+  CONFIRMADO
+  EN_PREPARACION
+  LISTO
+  EN_CAMINO
+  ENTREGADO
+  CANCELADO
+}
+
+enum OrderSource {
+  PANEL
+  WHATSAPP
+  PHONE
+  WEB
+}
+
+model Order {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  /// Correlativo por comercio y día operativo: el personal dice "el pedido 37".
+  number     Int
+  /// Día operativo ya resuelto, para que el dashboard no tenga que recalcular
+  /// la ventana horaria en cada consulta.
+  businessDate DateTime @db.Date
+
+  type   OrderType
+  status OrderStatus @default(PENDIENTE)
+  source OrderSource @default(PANEL)
+
+  customerId    Int?
+  /// Copia: el pedido tiene que poder leerse aunque el cliente se edite o borre.
+  customerName  String
+  customerPhone String?
+
+  deliveryStreet       String?
+  deliveryNumber       String?
+  deliveryApartment    String?
+  deliveryNeighborhood String?
+  deliveryReference    String? @db.Text
+  deliveryZoneName     String?
+
+  paymentMethodId   Int?
+  paymentMethodName String?
+  paidWithCents     Int?
+  isPaid            Boolean @default(false)
+
+  subtotalCents    Int
+  deliveryFeeCents Int @default(0)
+  discountCents    Int @default(0)
+  totalCents       Int
+
+  notes        String?   @db.Text
+  scheduledFor DateTime?
+  cancelReason String?   @db.Text
+
+  createdByUserId      Int?
+  createdByApiClientId Int?
+  /// Tolera los reintentos de n8n: si llega repetido se devuelve el pedido ya
+  /// creado en vez de hacer dos pizzas.
+  idempotencyKey       String?
+
+  placedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce      Commerce             @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  customer      Customer?            @relation(fields: [customerId], references: [id])
+  paymentMethod PaymentMethod?       @relation(fields: [paymentMethodId], references: [id])
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+
+  @@unique([commerceId, businessDate, number])
+  @@unique([commerceId, idempotencyKey])
+  @@index([commerceId, status, placedAt])
+  @@index([commerceId, businessDate])
+  @@index([commerceId, customerId, placedAt])
+  @@index([commerceId, updatedAt])
+}
+
+model OrderItem {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  orderId    Int
+
+  /// Referencias sólo para reportes; pueden quedar en null si se borra el
+  /// producto. Lo que se cobró está congelado en los campos de abajo.
+  productId Int?
+  variantId Int?
+
+  productName    String
+  variantName    String
+  unitPriceCents Int
+  quantity       Int
+  notes          String? @db.Text
+  lineTotalCents Int
+
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product?            @relation(fields: [productId], references: [id])
+  variant   ProductVariant?     @relation(fields: [variantId], references: [id])
+  modifiers OrderItemModifier[]
+
+  @@index([commerceId])
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderItemModifier {
+  id Int @id @default(autoincrement())
+
+  commerceId      Int
+  orderItemId     Int
+  optionId        Int?
+  name            String
+  priceDeltaCents Int
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId])
+  @@index([orderItemId])
+}
+
+/// Una fila por transición. Habilita auditoría desde el MVP y, más adelante,
+/// las métricas de tiempo de preparación sin cambiar el esquema.
+model OrderStatusHistory {
+  id Int @id @default(autoincrement())
+
+  commerceId Int
+  orderId    Int
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  note       String?      @db.Text
+
+  changedByUserId      Int?
+  changedByApiClientId Int?
+  createdAt            DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId])
+  @@index([orderId, createdAt])
+}
+
+/// Correlativo diario por comercio, actualizado bajo bloqueo transaccional.
+model OrderCounter {
+  commerceId   Int
+  businessDate DateTime @db.Date
+  lastNumber   Int      @default(0)
+
+  @@id([commerceId, businessDate])
 }
