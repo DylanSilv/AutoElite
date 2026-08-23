@@ -1,0 +1,828 @@
+// Esquema de las etapas 1.1 y 1.2: tenant e identidad.
+//
+// El catálogo, los clientes y los pedidos se agregan en las etapas siguientes
+// (ver docs/03-modelo-de-datos.md). El modelo del catálogo está bloqueado a
+// propósito hasta tener las respuestas del bloque A de
+// docs/07-preguntas-para-la-pizzeria.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// Raíz del aislamiento multi-tenant. Toda tabla de negocio cuelga de acá.
+model Commerce {
+  id       Int    @id @default(autoincrement())
+  /// Identificador expuesto por la API. Las URLs no revelan volumen de negocio
+  /// ni permiten enumerar registros de otro comercio.
+  publicId String @unique @default(cuid())
+
+  name    String
+  slug    String  @unique
+  phone   String?
+  address String?
+
+  timezone String @default("America/Montevideo")
+  currency String @default("UYU")
+  /// Determina cómo se normalizan los teléfonos a E.164: los planes de
+  /// numeración difieren de verdad entre países.
+  country  String @default("UY")
+
+  /// Hora local a partir de la cual empieza un nuevo día operativo. Un pedido
+  /// tomado a las 00:40 pertenece al día anterior para la caja del negocio.
+  businessDayCutoff String @default("05:00")
+
+  /// Horario de atención, tal como se lo cuenta el asistente al cliente.
+  ///
+  /// Es texto libre y no una grilla de días y horas a propósito: "de 19:00 a
+  /// cierre, todos los días" es lo que el comercio dice, y una grilla obligaría
+  /// a modelar feriados, cierres por vacaciones y el día que cierran temprano
+  /// porque no vino nadie. Cuando haga falta cerrar pedidos fuera de hora, eso
+  /// es una regla aparte, no este campo.
+  openingHours String?
+
+  /// Identificador del número de WhatsApp del comercio en la API de Meta.
+  ///
+  /// Es lo único que trae el webhook para saber a qué comercio pertenece un
+  /// mensaje entrante: Meta manda todos los eventos de una app al mismo
+  /// endpoint, sin ningún dato nuestro.
+  whatsappPhoneNumberId String? @unique
+
+  settings Json?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  apiClients     ApiClient[]
+  categories     Category[]
+  products       Product[]
+  modifierGroups ModifierGroup[]
+  customers      Customer[]
+  deliveryZones  DeliveryZone[]
+  paymentMethods PaymentMethod[]
+  orders         Order[]
+  promotions     Promotion[]
+  conversations  Conversation[]
+}
+
+enum UserRole {
+  PLATFORM_ADMIN
+  OWNER
+  MANAGER
+  STAFF
+}
+
+/// Identidad de una persona. Las máquinas usan ApiClient, nunca esto.
+model User {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  /// Null únicamente para PLATFORM_ADMIN, que es transversal a la plataforma.
+  commerceId Int?
+
+  /// Único a nivel plataforma, no por comercio: el login recibe solo un email y
+  /// tiene que poder resolverlo sin ambigüedad. El costo es que una misma
+  /// persona no puede tener cuentas en dos comercios con el mismo email; si
+  /// alguna vez hace falta, se agrega el comercio al formulario de login sin
+  /// migrar datos.
+  email        String @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(STAFF)
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce      Commerce?      @relation(fields: [commerceId], references: [id])
+  refreshTokens RefreshToken[]
+
+  @@index([commerceId, isActive])
+}
+
+/// Refresh tokens rotativos, guardados hasheados: robar la base no alcanza para
+/// hacerse pasar por un usuario.
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Credencial de máquina: n8n, agente de IA, futuras integraciones.
+///
+/// Separada de User a propósito. Si el agente usara la cuenta de un empleado,
+/// el historial de auditoría sería mentira y revocarle el acceso implicaría
+/// cambiarle la contraseña a una persona.
+model ApiClient {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  /// Hash de la clave. El texto plano se muestra una única vez, al crearla.
+  keyHash    String @unique
+  /// Lista de scopes, ej: ["catalog:read","orders:write"]
+  scopes     Json
+
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  commerce Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId])
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo
+// ---------------------------------------------------------------------------
+
+model Category {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  sortOrder  Int     @default(0)
+  isActive   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce Commerce  @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([commerceId, name])
+  @@index([commerceId, isActive, sortOrder])
+}
+
+/// El concepto comercial ("Muzzarella"). El precio vive en las variantes.
+model Product {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId  Int
+  categoryId  Int
+  name        String
+  description String? @db.Text
+  imageUrl    String?
+  /// Cortar un producto entero: "hoy no hay napolitana".
+  isAvailable Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  commerce       Commerce               @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  category       Category               @relation(fields: [categoryId], references: [id])
+  variants       ProductVariant[]
+  modifierGroups ProductModifierGroup[]
+  orderItems     OrderItem[]
+
+  @@index([commerceId, categoryId, isAvailable])
+  @@index([commerceId, name])
+}
+
+/// Lo que realmente se vende y tiene precio. Todo producto tiene al menos una,
+/// aunque se llame "Única": así el pedido siempre referencia una variante y no
+/// hay dos caminos de código.
+model ProductVariant {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  productId  Int
+  name       String
+  priceCents Int
+  /// Cortar sólo un tamaño: "se acabó la masa grande".
+  isAvailable Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@unique([productId, name])
+  @@index([commerceId])
+  @@index([productId, isAvailable])
+}
+
+/// Extras y opciones. Se definen a nivel comercio y se asocian a productos,
+/// para no repetir "Extras de pizza" en veinte productos.
+model ModifierGroup {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  minSelect  Int     @default(0)
+  maxSelect  Int     @default(1)
+  isActive   Boolean @default(true)
+  sortOrder  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce Commerce               @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  options  ModifierOption[]
+  products ProductModifierGroup[]
+
+  @@unique([commerceId, name])
+}
+
+model ModifierOption {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId      Int
+  modifierGroupId Int
+  name            String
+  priceDeltaCents Int     @default(0)
+  isAvailable     Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  group ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([modifierGroupId, name])
+  @@index([commerceId])
+}
+
+model ProductModifierGroup {
+  productId       Int
+  modifierGroupId Int
+  sortOrder       Int @default(0)
+
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  group   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@id([productId, modifierGroupId])
+}
+
+// ---------------------------------------------------------------------------
+// Clientes y configuración operativa
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  /// Identidad del cliente, normalizada a E.164. En la fase 2 WhatsApp entrega
+  /// el número en este formato: si acá se guardara lo que tipeó el operador, el
+  /// agente no podría reconocer a un cliente ya existente.
+  phoneE164  String
+  phoneRaw   String?
+  notes      String? @db.Text
+
+  /// Denormalizado a propósito: evita un GROUP BY sobre todo el historial cada
+  /// vez que se abre una ficha. Se recalcula al confirmar o cancelar un pedido.
+  ordersCount     Int       @default(0)
+  totalSpentCents Int       @default(0)
+  lastOrderAt     DateTime?
+
+  /// Último mensaje recibido del cliente por WhatsApp.
+  ///
+  /// WhatsApp sólo permite escribirle libremente a alguien dentro de las 24
+  /// horas posteriores a su último mensaje; fuera de esa ventana hace falta una
+  /// plantilla aprobada por Meta. Sin este dato no se puede saber de antemano
+  /// si un aviso va a poder entregarse.
+  lastInboundAt DateTime?
+  /// El cliente pidió no recibir avisos automáticos.
+  acceptsNotifications Boolean @default(true)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce  Commerce          @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  addresses CustomerAddress[]
+  orders    Order[]
+
+  @@unique([commerceId, phoneE164])
+  @@index([commerceId, name])
+}
+
+model CustomerAddress {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId     Int
+  customerId     Int
+  label          String?
+  street         String
+  number         String?
+  apartment      String?
+  neighborhood   String?
+  city           String?
+  /// "portón verde, timbre 2": lo que el cadete necesita de verdad.
+  reference      String? @db.Text
+  deliveryZoneId Int?
+  isDefault      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  deliveryZone DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+
+  @@index([commerceId])
+  @@index([customerId])
+}
+
+model DeliveryZone {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId   Int
+  name         String
+  feeCents     Int
+  estimatedMin Int?
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce  Commerce          @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  addresses CustomerAddress[]
+
+  @@unique([commerceId, name])
+}
+
+model PaymentMethod {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  name       String
+  code       String
+  /// Habilita registrar con cuánto paga el cliente, para calcular el vuelto.
+  requiresChangeFor Boolean @default(false)
+
+  /// Exige que el cliente pague antes de que el pedido llegue a la cocina.
+  ///
+  /// Es la diferencia entre "te lo cobro cuando lo retirás" y "pagá y recién
+  /// ahí lo hacemos": sin esto, un pedido por WhatsApp de alguien que no
+  /// aparece nunca deja la comida hecha y perdida.
+  requiresPrepayment Boolean @default(false)
+
+  /// Modalidades en las que se puede usar, como lista de OrderType.
+  /// El efectivo típicamente se limita a retiro y salón.
+  allowedOrderTypes Json?
+
+  /// Instrucciones que se le mandan al cliente para pagar: alias, cuenta,
+  /// titular. Las escribe el comercio; el sistema sólo las transmite.
+  instructions String? @db.Text
+  /// Imagen del QR de Mercado Pago, si el método lo usa.
+  qrImageUrl   String?
+
+  isActive          Boolean @default(true)
+  sortOrder         Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@unique([commerceId, code])
+}
+
+// ---------------------------------------------------------------------------
+// Pedidos
+// ---------------------------------------------------------------------------
+
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+}
+
+enum OrderStatus {
+  PENDIENTE
+  CONFIRMADO
+  EN_PREPARACION
+  LISTO
+  EN_CAMINO
+  ENTREGADO
+  CANCELADO
+}
+
+enum OrderSource {
+  PANEL
+  WHATSAPP
+  PHONE
+  WEB
+}
+
+/// Estado del cobro, independiente del avance en la cocina.
+///
+/// Son dos ejes distintos a propósito: un pedido que se paga contra entrega
+/// tiene que llegar a la cocina igual, y uno prepago no puede llegar aunque el
+/// mostrador quiera apurarlo.
+enum PaymentStatus {
+  /// Se cobra al entregar o en el local: no bloquea nada.
+  NOT_REQUIRED
+  /// Se le pidió el pago al cliente y todavía no llegó.
+  PENDING
+  /// El cliente mandó un comprobante que alguien tiene que mirar.
+  PROOF_SUBMITTED
+  /// Verificado: el pedido puede avanzar.
+  CONFIRMED
+  /// El comprobante no se pudo verificar.
+  REJECTED
+}
+
+model Order {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  /// Correlativo por comercio y día operativo: el personal dice "el pedido 37".
+  number     Int
+  /// Día operativo ya resuelto, para que el dashboard no tenga que recalcular
+  /// la ventana horaria en cada consulta.
+  businessDate DateTime @db.Date
+
+  type   OrderType
+  status OrderStatus @default(PENDIENTE)
+  source OrderSource @default(PANEL)
+
+  customerId    Int?
+  /// Copia: el pedido tiene que poder leerse aunque el cliente se edite o borre.
+  customerName  String
+  customerPhone String?
+
+  deliveryStreet       String?
+  deliveryNumber       String?
+  deliveryApartment    String?
+  deliveryNeighborhood String?
+  deliveryReference    String? @db.Text
+  deliveryZoneName     String?
+
+  paymentMethodId   Int?
+  paymentMethodName String?
+  paidWithCents     Int?
+  isPaid            Boolean @default(false)
+
+  paymentStatus   PaymentStatus @default(NOT_REQUIRED)
+  paymentNote     String?       @db.Text
+  paidAt          DateTime?
+  paymentReviewedByUserId Int?
+
+  subtotalCents    Int
+  deliveryFeeCents Int @default(0)
+  discountCents    Int @default(0)
+  totalCents       Int
+
+  notes        String?   @db.Text
+  scheduledFor DateTime?
+  cancelReason String?   @db.Text
+
+  createdByUserId      Int?
+  createdByApiClientId Int?
+  /// Tolera los reintentos de n8n: si llega repetido se devuelve el pedido ya
+  /// creado en vez de hacer dos pizzas.
+  idempotencyKey       String?
+
+  placedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce      Commerce             @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  customer      Customer?            @relation(fields: [customerId], references: [id])
+  paymentMethod PaymentMethod?       @relation(fields: [paymentMethodId], references: [id])
+  items          OrderItem[]
+  statusHistory  OrderStatusHistory[]
+  notifications  OutboundMessage[]
+  paymentProofs  PaymentProof[]
+
+  @@unique([commerceId, businessDate, number])
+  @@unique([commerceId, idempotencyKey])
+  @@index([commerceId, paymentStatus])
+  @@index([commerceId, status, placedAt])
+  @@index([commerceId, businessDate])
+  @@index([commerceId, customerId, placedAt])
+  @@index([commerceId, updatedAt])
+}
+
+model OrderItem {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  orderId    Int
+
+  /// Referencias sólo para reportes; pueden quedar en null si se borra el
+  /// producto. Lo que se cobró está congelado en los campos de abajo.
+  productId Int?
+  variantId Int?
+
+  productName    String
+  variantName    String
+  unitPriceCents Int
+  quantity       Int
+  notes          String? @db.Text
+  lineTotalCents Int
+
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product?            @relation(fields: [productId], references: [id])
+  variant   ProductVariant?     @relation(fields: [variantId], references: [id])
+  modifiers OrderItemModifier[]
+
+  @@index([commerceId])
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderItemModifier {
+  id Int @id @default(autoincrement())
+
+  commerceId      Int
+  orderItemId     Int
+  optionId        Int?
+  name            String
+  priceDeltaCents Int
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId])
+  @@index([orderItemId])
+}
+
+/// Una fila por transición. Habilita auditoría desde el MVP y, más adelante,
+/// las métricas de tiempo de preparación sin cambiar el esquema.
+model OrderStatusHistory {
+  id Int @id @default(autoincrement())
+
+  commerceId Int
+  orderId    Int
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  note       String?      @db.Text
+
+  changedByUserId      Int?
+  changedByApiClientId Int?
+  createdAt            DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId])
+  @@index([orderId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Mensajería saliente (WhatsApp)
+// ---------------------------------------------------------------------------
+
+enum MessageKind {
+  /// Respuesta del asistente dentro de una conversación.
+  AGENT_REPLY
+  ORDER_RECEIVED
+  PAYMENT_REQUESTED
+  PAYMENT_CONFIRMED
+  PAYMENT_REJECTED
+  ORDER_CONFIRMED
+  ORDER_READY_PICKUP
+  ORDER_READY_DINE_IN
+  ORDER_ON_THE_WAY
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+  /// No se envía por una razón conocida: el cliente no tiene teléfono, pidió no
+  /// recibir avisos, o está fuera de la ventana en la que WhatsApp permite
+  /// escribirle sin plantilla aprobada.
+  SKIPPED
+}
+
+/// Cola de mensajes salientes.
+///
+/// Se persiste en vez de enviar en medio del request por tres razones: marcar
+/// un pedido como listo no puede quedar esperando a la API de WhatsApp, una
+/// caída del proveedor no puede perder avisos, y hace falta poder reintentar y
+/// auditar qué se le dijo a cada cliente.
+model OutboundMessage {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  orderId    Int?
+  customerId Int?
+
+  toPhoneE164 String
+  kind        MessageKind
+  body        String        @db.Text
+  status      MessageStatus @default(PENDING)
+
+  attempts          Int     @default(0)
+  lastError         String? @db.Text
+  providerMessageId String?
+  /// Motivo cuando queda en SKIPPED, para que el personal entienda por qué el
+  /// cliente no recibió el aviso.
+  skipReason        String?
+
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId, status, createdAt])
+  @@index([orderId])
+}
+
+/// Comprobante de pago enviado por el cliente.
+///
+/// ADVERTENCIA DE DISEÑO: una captura de pantalla no es prueba de pago. Se
+/// falsifica en minutos, así que sirve para que una persona verifique contra la
+/// cuenta real, no para confirmar sola. La confirmación fehaciente llega cuando
+/// el pago lo reporta la pasarela por API, y por eso `paymentStatus` puede
+/// pasar a CONFIRMED sin que exista ningún comprobante acá.
+model PaymentProof {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  orderId    Int
+
+  /// Dónde quedó guardada la imagen.
+  mediaUrl        String?
+  /// Identificador que devuelve WhatsApp, para poder recuperarla del proveedor.
+  whatsappMediaId String?
+  mimeType        String?
+  /// Texto que mandó el cliente junto con el comprobante.
+  note            String? @db.Text
+
+  submittedAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId])
+  @@index([orderId])
+}
+
+/// Correlativo diario por comercio, actualizado bajo bloqueo transaccional.
+model OrderCounter {
+  commerceId   Int
+  businessDate DateTime @db.Date
+  lastNumber   Int      @default(0)
+
+  @@id([commerceId, businessDate])
+}
+
+// ---------------------------------------------------------------------------
+// Promociones
+// ---------------------------------------------------------------------------
+
+/// Promoción vigente, tal como se le cuenta al cliente.
+///
+/// A propósito NO calcula descuentos: es texto que el comercio escribe y el
+/// asistente transmite. Un motor de reglas de descuento es un producto en sí
+/// mismo, y arrancar por ahí garantizaría promociones que la pizzería no puede
+/// cargar sola. Cuando el descuento se aplique de verdad, el importe sigue
+/// saliendo de `discountCents` del pedido, que ya existe.
+model Promotion {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId  Int
+  title       String
+  description String @db.Text
+
+  /// Vigencia opcional. Sin fechas, la promoción vale mientras esté activa.
+  startsAt DateTime?
+  endsAt   DateTime?
+  /// Días de la semana en los que aplica, como lista de números (0 = domingo).
+  /// Vacío o nulo significa todos los días: los 2x1 suelen ser de un día fijo.
+  weekdays Json?
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commerce Commerce @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+
+  @@index([commerceId, isActive, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Conversaciones del asistente
+// ---------------------------------------------------------------------------
+
+enum ConversationChannel {
+  WHATSAPP
+  /// Simulador del panel: sirve para probar y mostrar el asistente sin gastar
+  /// conversaciones de WhatsApp ni necesitar credenciales de Meta.
+  SIMULATOR
+}
+
+enum ConversationStatus {
+  /// El asistente responde solo.
+  BOT
+  /// Derivada a una persona: el asistente deja de contestar.
+  HUMAN
+  CLOSED
+}
+
+enum ConversationRole {
+  CUSTOMER
+  ASSISTANT
+  /// Resultado de una herramienta. Se guarda para poder auditar de dónde salió
+  /// cada dato que el asistente le dijo al cliente.
+  TOOL
+  /// Mensaje escrito por el personal desde el panel.
+  STAFF
+}
+
+/// Hilo con un cliente. Uno por teléfono y canal.
+model Conversation {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId Int
+  channel    ConversationChannel @default(WHATSAPP)
+  phoneE164  String
+  customerId Int?
+
+  contactName String?
+  status      ConversationStatus @default(BOT)
+  /// Por qué dejó de contestar el asistente. Lo lee el personal en el panel.
+  handoffReason String?
+
+  /// Pedido a medio armar: lo que el cliente eligió pero todavía no confirmó.
+  ///
+  /// Vive acá y no en la memoria del proceso porque una conversación por
+  /// WhatsApp se retoma horas después, desde otra instancia de la API, y porque
+  /// el personal tiene que poder ver qué está pidiendo alguien antes de que
+  /// termine.
+  draft Json?
+
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  commerce Commerce              @relation(fields: [commerceId], references: [id], onDelete: Cascade)
+  messages ConversationMessage[]
+
+  @@unique([commerceId, channel, phoneE164])
+  @@index([commerceId, lastMessageAt])
+}
+
+model ConversationMessage {
+  id       Int    @id @default(autoincrement())
+  publicId String @unique @default(cuid())
+
+  commerceId     Int
+  conversationId Int
+
+  role ConversationRole
+  body String           @db.Text
+
+  /// Herramienta invocada y su resultado, cuando el turno fue una consulta a la
+  /// API en vez de texto para el cliente.
+  toolName   String?
+  toolArgs   Json?
+  toolResult Json?
+
+  /// Imagen adjunta por el cliente (típicamente el comprobante de pago).
+  mediaId   String?
+  mediaType String?
+
+  /// Identificador del mensaje en el proveedor, para conciliar con WhatsApp.
+  providerMessageId String? @unique
+
+  createdAt DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, id])
+  @@index([commerceId, createdAt])
+}

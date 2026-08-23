@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Sin rootDir: `packages/shared` se consume como código fuente, así que sus
+    // archivos entran al programa desde afuera de apps/api. El empaquetado para
+    // producción se define en la etapa 1.7, junto con el despliegue.
+    "outDir": "./dist",
+    "types": ["node"],
+    "noEmit": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@autoelite/shared": ["packages/shared/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "prisma/**/*.ts", "vitest.config.ts"]
+}

@@ -1,0 +1,15 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Paquetes autorizados a ejecutar scripts de instalación.
+#
+# Vive acá y no en package.json porque a partir de pnpm 11 el campo
+# `pnpm.onlyBuiltDependencies` de package.json se ignora. Si no se autorizan,
+# Prisma no genera su cliente y esbuild no descarga su binario, y el proyecto
+# falla al arrancar con un error que no dice nada de esto.
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - prisma
+  - esbuild

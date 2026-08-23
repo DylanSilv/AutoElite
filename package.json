@@ -1,0 +1,27 @@
+{
+  "name": "autoelite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @autoelite/api --filter @autoelite/web dev",
+    "dev:api": "pnpm --filter @autoelite/api dev",
+    "dev:web": "pnpm --filter @autoelite/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @autoelite/api db:migrate",
+    "db:seed": "pnpm --filter @autoelite/api db:seed",
+    "db:up": "docker compose up -d mysql",
+    "db:setup": "pnpm --filter @autoelite/api db:generate && pnpm --filter @autoelite/api db:deploy && pnpm --filter @autoelite/api db:seed",
+    "db:down": "docker compose down",
+    "postinstall": "pnpm --filter @autoelite/api db:generate"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

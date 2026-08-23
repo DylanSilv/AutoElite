@@ -1,9 +1,13 @@
 node_modules/
 dist/
 build/
+
+# Ningún archivo con secretos reales, pero sí las plantillas de ejemplo.
 .env
 .env.*
-!.env.example
+!.env*.example
+
 *.log
 .DS_Store
 coverage/
+.vite/
