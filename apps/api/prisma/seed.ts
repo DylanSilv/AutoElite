@@ -874,12 +874,15 @@ async function main(): Promise<void> {
   console.log(`Clientes: ${customers.length} · Pedidos: ${totalOrders}`);
   console.log(`Acceso: ${email} / ${password}`);
   console.log('');
-  console.log('ANTES DE MOSTRARLO, completar con los datos del comercio:');
-  console.log('  1. Precios de la carta            → panel · Menú');
-  console.log('  2. Alias / cuenta y QR de cobro   → panel · Configuración');
-  console.log('  3. Zonas de reparto y sus costos  → panel · Configuración');
-  console.log('  4. Teléfono y dirección exacta    → panel · Configuración');
-  console.log('  La lista completa está en docs/09-nuevo-quijote.md');
+  console.log('Listo para usar: `pnpm dev` y entrás al panel.');
+  console.log('');
+  console.log('Los datos cargados son una propuesta. Para la reunión con el negocio');
+  console.log('conviene reemplazarlos por los suyos, todo desde el panel:');
+  console.log('  · Precios de la carta            → Menú');
+  console.log('  · Zonas de reparto y sus costos  → Configuración');
+  console.log('  · Teléfono y dirección exacta    → Configuración');
+  console.log('  · Alias / cuenta y QR de cobro   → Configuración  (lo único que hoy está vacío)');
+  console.log('  Detalle en docs/09-nuevo-quijote.md');
 }
 
 /** Deja un hilo de WhatsApp ya conversado, para poder mostrarlo sin escribirlo. */
