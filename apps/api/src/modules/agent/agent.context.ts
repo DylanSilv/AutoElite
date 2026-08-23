@@ -58,6 +58,7 @@ export async function buildAgentContext(commerceId: number): Promise<TenantConte
     timezone: commerce.timezone,
     currency: commerce.currency,
     businessDayCutoff: commerce.businessDayCutoff,
+    openingHours: commerce.openingHours,
   };
 
   return {

@@ -89,6 +89,28 @@ describe('consultas', () => {
     expect(res.reply).toContain('no tenemos promos');
   });
 
+  it('informa el horario que cargó el comercio', async () => {
+    await prisma.commerce.update({
+      where: { id: ctx.commerceId },
+      data: { openingHours: 'todos los días desde las 19:00' },
+    });
+    const built = await buildAgentContext(ctx.commerceId);
+    const res = await handleInboundMessage(built!, {
+      phone: PHONE,
+      text: '¿a qué hora abren?',
+      channel: 'WHATSAPP',
+    } as Parameters<typeof handleInboundMessage>[1]);
+
+    expect(res.toolsUsed).toContain('ver_horario');
+    expect(res.reply).toContain('19:00');
+  });
+
+  it('sin horario cargado, deriva en vez de inventar uno', async () => {
+    // Mandar a alguien a un local cerrado es peor que no contestar.
+    const res = await escribir('están abiertos?');
+    expect(res.reply).toContain('No tengo el horario');
+  });
+
   it('informa las zonas de reparto con su costo', async () => {
     const res = await escribir('llegan a mi barrio? cuánto sale el envío');
     expect(res.toolsUsed).toContain('ver_zonas_de_envio');

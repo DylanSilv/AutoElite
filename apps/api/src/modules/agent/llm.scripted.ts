@@ -77,6 +77,7 @@ function parseAddress(text: string): Record<string, string> | null {
 const INTENTS: { name: string; pattern: RegExp }[] = [
   { name: 'menu', pattern: /\b(carta|menu|precios?|que tienen|que hay|tenes pizza|cuanto (sale|cuesta|vale))\b/ },
   { name: 'promos', pattern: /\b(promo|promos|promocion|promociones|oferta|ofertas|descuento|descuentos|2x1)\b/ },
+  { name: 'horario', pattern: /\b(horario|a que hora|que hora|abren|abiertos?|cierran|hasta que hora|estan abierto)\b/ },
   { name: 'zonas', pattern: /\b(zona|zonas|reparten|reparto|llegan a|envian a|cuanto sale el envio|hacen envios?|delivery a)\b/ },
   { name: 'pagos', pattern: /\b(que medios|cuales medios|como pago|formas? de pago|medios de pago|aceptan tarjeta)\b/ },
   { name: 'estado', pattern: /\b(estado|como viene|cuanto falta|ya salio|mi pedido|donde esta|demora)\b/ },
@@ -147,6 +148,14 @@ function renderPromos(result: Record<string, unknown>): string {
   }
   const lineas = promociones.map((promo) => `• *${promo.titulo}*: ${promo.detalle}`);
   return `Promos de hoy:\n${lineas.join('\n')}`;
+}
+
+function renderHorario(result: Record<string, unknown>): string {
+  if (typeof result.horario !== 'string' || !result.horario) {
+    // El comercio no cargó el horario. Antes que arriesgar uno, se deriva.
+    return 'No tengo el horario a mano. Te paso con alguien del local que te lo confirme.';
+  }
+  return `Atendemos ${result.horario}.\n\n¿Te armo un pedido?`;
 }
 
 function renderZonas(result: Record<string, unknown>): string {
@@ -300,6 +309,8 @@ function renderToolResult(echo: ToolEcho): LlmCompletion {
   switch (echo.name) {
     case 'ver_menu':
       return say(renderMenu(echo.result));
+    case 'ver_horario':
+      return say(renderHorario(echo.result));
     case 'ver_promociones':
       return say(renderPromos(echo.result));
     case 'ver_zonas_de_envio':
@@ -414,6 +425,7 @@ export class ScriptedLlmProvider implements LlmProvider {
       }
     }
 
+    if (intents.has('horario')) return toolCall('ver_horario');
     if (intents.has('promos')) return toolCall('ver_promociones');
     // Las zonas se miran antes que la carta: "¿cuánto sale el envío?" dispara
     // las dos, y la respuesta útil es la del envío.

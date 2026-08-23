@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { Button, Card, ErrorMessage, Field, Input } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 
+/**
+ * Nombre del comercio en la pantalla de login.
+ *
+ * Antes de iniciar sesión no sabemos a qué comercio pertenece quien está
+ * mirando, así que no se puede leer de la API: se define al compilar. Con
+ * varios comercios en la misma instalación, esto pasa a ser el nombre del
+ * producto y el del local aparece recién adentro.
+ */
+const COMMERCE_NAME = import.meta.env.VITE_COMMERCE_NAME ?? 'Nuevo Quijote';
+
 export function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -27,7 +37,7 @@ export function LoginPage() {
       <Card className="w-full max-w-sm p-6">
         <div className="mb-6 text-center">
           <div className="mb-2 text-3xl">🍕</div>
-          <h1 className="text-xl font-semibold text-slate-900">La Napolitana</h1>
+          <h1 className="text-xl font-semibold text-slate-900">{COMMERCE_NAME}</h1>
           <p className="text-sm text-slate-500">Gestión de pedidos</p>
         </div>
 

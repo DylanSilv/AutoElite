@@ -3,9 +3,13 @@
 Plataforma de gestión de pedidos para comercios gastronómicos, con un piloto inicial en una
 pizzería y un agente de IA sobre WhatsApp en fases posteriores.
 
-**Estado actual: MVP funcional.** El sistema permite operar una pizzería de punta a punta: cargar
-pedidos, seguirlos por estado, gestionar menú y clientes, y ver métricas. Viene con datos de
-demostración —realistas pero ficticios— para poder mostrarlo funcionando.
+**Estado actual: MVP funcional, con el asistente de WhatsApp construido.** El sistema permite operar
+una pizzería de punta a punta —cargar pedidos, seguirlos por estado, gestionar menú y clientes, ver
+métricas— y su número de WhatsApp atiende solo: pasa la carta, arma pedidos y cobra por adelantado.
+
+Viene cargado con los datos del comercio piloto, **Pizzería Nuevo Quijote** (Brazo Oriental,
+Montevideo), para poder mostrarlo funcionando. Qué es real y qué hay que completar antes de
+presentárselo está en [docs/09](docs/09-nuevo-quijote.md).
 
 Lo que sigue después del MVP está en [docs/06](docs/06-mvp.md): WhatsApp y el agente de IA (fase 2),
 audios (fase 3) y telefonía (fase 4).
@@ -27,6 +31,7 @@ IA es un detalle de implementación intercambiable. Ninguna regla de negocio viv
 | [06 — MVP y fases](docs/06-mvp.md) | Alcance cerrado de la fase 1, qué queda explícitamente afuera y el plan por etapas |
 | [07 — Preguntas para la pizzería](docs/07-preguntas-para-la-pizzeria.md) | Lo que hay que validar con el comercio antes de escribir determinado código |
 | [08 — Asistente de WhatsApp](docs/08-asistente-whatsapp.md) | Cómo funciona el asistente, qué puede y qué no puede hacer, y cómo enchufarlo a un número real |
+| [09 — Puesta en marcha para Nuevo Quijote](docs/09-nuevo-quijote.md) | Qué datos del negocio son reales, cuáles son propuesta nuestra y qué hay que pedirles |
 
 ## Funcionalidad
 
@@ -51,7 +56,7 @@ Cuando el personal mueve un pedido de estado, el sistema le avisa al cliente por
 | Pedido recibido | Sólo si llegó por WhatsApp o por la web: quien pidió por teléfono ya lo sabe |
 | Confirmado | "Confirmamos tu pedido #37 y ya lo estamos preparando" |
 | Listo | Sólo en retiro y salón. En un envío el pedido todavía no salió, y avisar ahí haría salir al cliente a la puerta al pedo |
-| En camino | "Tu pedido #37 salió a Av. 18 de Julio 1435" |
+| En camino | "Tu pedido #37 salió a Av. Millán 3920" |
 | Cancelado | Con el motivo |
 
 Los mensajes van a una cola persistida en vez de enviarse en medio del request: marcar un pedido como
@@ -115,8 +120,8 @@ pnpm dev:web    # panel en http://localhost:5173
 ```
 
 `db:setup` carga el menú, las zonas, los clientes y dos semanas de historial, e imprime en consola el
-usuario y la contraseña de acceso. Se puede volver a correr cuando se quiera: limpia y recarga sólo
-los datos operativos del comercio de demostración.
+usuario y la contraseña de acceso más la lista de datos que faltan completar. Se puede volver a
+correr cuando se quiera: limpia y recarga sólo los datos operativos del comercio piloto.
 
 ### Si algo falla
 
@@ -168,11 +173,20 @@ packages/shared     Tipos y esquemas Zod del contrato, compartidos por ambos
 docs/               Análisis, arquitectura y plan por fases
 ```
 
-## Datos de demostración
+## Datos cargados
 
-El menú, los clientes, las promociones, el historial y dos conversaciones de WhatsApp son ficticios
-pero con la forma del negocio real. Cuando la pizzería se sume, se reemplazan por los suyos: el seed
-limpia y recarga sólo los datos operativos.
+El sistema viene con los datos de **Pizzería Nuevo Quijote** (Brazo Oriental, Montevideo), el
+comercio piloto. Del negocio se tomó lo verificable —nombre, barrio, rubro de la carta y que
+atiende todos los días desde las 19:00—; los precios, las zonas de reparto y las promociones son
+una propuesta de arranque que se corrige desde el panel, y los clientes e historial son ficticios
+para que el tablero tenga algo que mostrar.
+
+**Los datos de cobro están vacíos a propósito.** Un alias de transferencia equivocado manda la
+plata del cliente a otra cuenta, así que el asistente avisa que faltan cargar en vez de inventar
+un número.
+
+Qué es real, qué es propuesta y qué hay que pedirle al comercio está en
+[docs/09](docs/09-nuevo-quijote.md), junto con el guion de los cinco minutos antes de la reunión.
 
 Hay una decisión de modelo que quedó abierta a propósito y conviene cerrar antes de cargar datos
 reales: **la pizza mitad y mitad**. Está en el bloque A de

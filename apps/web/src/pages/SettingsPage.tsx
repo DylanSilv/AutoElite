@@ -41,6 +41,10 @@ export function SettingsPage() {
               <dd className="text-right">{commerce.address ?? '—'}</dd>
             </div>
             <div className="flex justify-between">
+              <dt className="text-slate-500">Horario</dt>
+              <dd className="text-right">{commerce.openingHours ?? '— sin cargar'}</dd>
+            </div>
+            <div className="flex justify-between">
               <dt className="text-slate-500">Zona horaria</dt>
               <dd>{commerce.timezone}</dd>
             </div>
@@ -51,7 +55,8 @@ export function SettingsPage() {
           </dl>
           <p className="mt-3 text-xs text-slate-500">
             El día operativo cierra a las {commerce.businessDayCutoff}: un pedido de las 00:40
-            cuenta para el día anterior, igual que en la caja.
+            cuenta para el día anterior, igual que en la caja. El horario es lo que el asistente
+            le contesta a quien pregunta si están abiertos.
           </p>
         </Card>
 

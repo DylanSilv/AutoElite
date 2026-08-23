@@ -15,6 +15,8 @@ export const updateCommerceSchema = z
      * coincide con la caja.
      */
     businessDayCutoff: timeOfDaySchema.optional(),
+    /** Texto libre: es lo que el asistente le contesta a quien pregunta a qué hora abren. */
+    openingHours: z.string().max(200).trim().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'No hay campos para actualizar' });
 export type UpdateCommerceInput = z.infer<typeof updateCommerceSchema>;
@@ -28,5 +30,6 @@ export interface CommerceDto {
   timezone: string;
   currency: string;
   businessDayCutoff: string;
+  openingHours: string | null;
   isActive: boolean;
 }

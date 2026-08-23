@@ -138,6 +138,22 @@ const verPromociones: AgentTool = {
   },
 };
 
+const verHorario: AgentTool = {
+  definition: {
+    name: 'ver_horario',
+    description:
+      'Horario de atención del local. Usar cuando el cliente pregunta a qué hora abren, si están ' +
+      'abiertos o hasta qué hora toman pedidos.',
+    parameters: { type: 'object', properties: {} },
+  },
+  // Async porque lo pide la interfaz de las herramientas: acá no hay consulta.
+  async run({ ctx }) {
+    // Si el comercio no lo cargó, se dice que no se sabe en vez de inventar un
+    // horario: mandar a alguien a un local cerrado es peor que no contestar.
+    return { horario: ctx.commerce.openingHours ?? null };
+  },
+};
+
 const verZonasDeEnvio: AgentTool = {
   definition: {
     name: 'ver_zonas_de_envio',
@@ -635,6 +651,7 @@ const derivarAPersona: AgentTool = {
 
 export const AGENT_TOOLS: AgentTool[] = [
   verMenu,
+  verHorario,
   verPromociones,
   verZonasDeEnvio,
   verMediosDePago,

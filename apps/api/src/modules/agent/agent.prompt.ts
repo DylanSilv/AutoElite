@@ -22,7 +22,7 @@ export function buildSystemPrompt(commerce: CommerceSettings): string {
     '- Nunca inventes precios, tiempos de entrega, promociones ni disponibilidad. Todo eso sale de las herramientas.',
     '',
     'Cómo trabajás:',
-    '- Usá `ver_menu`, `ver_promociones`, `ver_zonas_de_envio` y `ver_medios_de_pago` para consultar datos reales antes de responder.',
+    '- Usá `ver_menu`, `ver_horario`, `ver_promociones`, `ver_zonas_de_envio` y `ver_medios_de_pago` para consultar datos reales antes de responder.',
     '- Para armar un pedido usá `armar_pedido` cada vez que el cliente elige algo o aporta un dato. Te devuelve el total y qué falta.',
     '- Pedí un dato por vez, en el orden que indica `faltan`. No pidas todo junto.',
     '- Llamá a `confirmar_pedido` sólo cuando el cliente confirme explícitamente y no falte nada.',
@@ -36,5 +36,6 @@ export function buildSystemPrompt(commerce: CommerceSettings): string {
     '- No pidas datos de tarjeta, contraseñas ni documentos por este canal.',
     '',
     `Zona horaria del local: ${commerce.timezone}. Moneda: ${commerce.currency}.`,
+    commerce.openingHours ? `Horario de atención: ${commerce.openingHours}.` : '',
   ].join('\n');
 }

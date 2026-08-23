@@ -36,6 +36,15 @@ model Commerce {
   /// tomado a las 00:40 pertenece al día anterior para la caja del negocio.
   businessDayCutoff String @default("05:00")
 
+  /// Horario de atención, tal como se lo cuenta el asistente al cliente.
+  ///
+  /// Es texto libre y no una grilla de días y horas a propósito: "de 19:00 a
+  /// cierre, todos los días" es lo que el comercio dice, y una grilla obligaría
+  /// a modelar feriados, cierres por vacaciones y el día que cierran temprano
+  /// porque no vino nadie. Cuando haga falta cerrar pedidos fuera de hora, eso
+  /// es una regla aparte, no este campo.
+  openingHours String?
+
   /// Identificador del número de WhatsApp del comercio en la API de Meta.
   ///
   /// Es lo único que trae el webhook para saber a qué comercio pertenece un

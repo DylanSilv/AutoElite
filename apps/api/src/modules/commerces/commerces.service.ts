@@ -14,6 +14,7 @@ function toCommerceDto(commerce: Commerce): CommerceDto {
     timezone: commerce.timezone,
     currency: commerce.currency,
     businessDayCutoff: commerce.businessDayCutoff,
+    openingHours: commerce.openingHours,
     isActive: commerce.isActive,
   };
 }

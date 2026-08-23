@@ -6,100 +6,119 @@ import { normalizePhone } from '../src/shared/phone.js';
 import { computeLineTotal, computeTotals } from '../src/modules/orders/orders.pricing.js';
 
 /**
- * Datos de demostración de una pizzería.
+ * Datos de puesta en marcha de Pizzería Nuevo Quijote (Brazo Oriental,
+ * Montevideo).
  *
- * Son ficticios pero con la forma del negocio real: menú con tamaños y extras,
- * zonas de envío, clientes recurrentes e historial de pedidos repartido en las
- * últimas dos semanas. Sirven para mostrar el sistema funcionando; cuando el
- * comercio se sume, se reemplazan por los suyos.
+ * QUÉ ES REAL Y QUÉ NO
+ *
+ * Del negocio se tomó lo que es público y verificable: el nombre, el barrio, el
+ * rubro de la carta —pizzas, fainá, lehmeyún y sándwiches calientes— y que
+ * atiende todos los días desde las 19:00.
+ *
+ * Todo lo demás es una PROPUESTA para reemplazar con los datos del comercio:
+ * los precios son estimaciones de plaza, las zonas de envío son los barrios
+ * linderos con tarifas a confirmar, y el teléfono y los datos bancarios son
+ * marcadores a completar (ver docs/09).
+ *
+ * NADA de esto se inventa "por las dudas" en producción: el alias de
+ * transferencia y el QR de Mercado Pago quedan vacíos a propósito, porque un
+ * dato de cobro equivocado manda la plata del cliente a otro lado.
+ *
+ * El historial de pedidos y los clientes SÍ son ficticios: existen para que el
+ * tablero y el dashboard tengan algo que mostrar el día de la demostración.
  */
 
 const prisma = new PrismaClient();
 
 const TIMEZONE = 'America/Montevideo';
 const COUNTRY = 'UY';
+/** Cierran de madrugada: el pedido de las 00:40 cuenta para el día anterior. */
 const CUTOFF = '05:00';
-const SLUG = 'pizzeria-piloto';
+const SLUG = 'nuevo-quijote';
+
+const COMMERCE = {
+  name: 'Pizzería Nuevo Quijote',
+  /** Confirmado por el perfil público del negocio. */
+  openingHours: 'todos los días desde las 19:00',
+  /** Falta la altura exacta: completar antes de la demostración. */
+  address: 'Av. Burgues, Brazo Oriental, Montevideo',
+  /** MARCADOR: poner el número real del local. */
+  phone: '+598 2 000 0000',
+};
 
 // ---------------------------------------------------------------------------
 // Catálogo
 // ---------------------------------------------------------------------------
 
-/** Precios en centésimos: $650 → 65000. */
+/** Precios en centésimos: $700 → 70000. */
 const p = (pesos: number) => pesos * 100;
 
 const PIZZA_SIZES = ['Chica (4 porciones)', 'Mediana (6 porciones)', 'Grande (8 porciones)'];
 
+/**
+ * La carta.
+ *
+ * Las categorías salen del rubro real del negocio: pizzas, fainá, lehmeyún y
+ * sándwiches calientes. Los productos dentro de cada una y TODOS los precios son
+ * una propuesta de arranque: se corrigen desde el panel en Menú, sin tocar
+ * código, y conviene hacerlo con la carta del local al lado antes de mostrarlo.
+ */
 const MENU = [
   {
     category: 'Pizzas',
     products: [
-      { name: 'Muzzarella', description: 'Salsa de tomate, muzzarella y aceitunas', prices: [390, 520, 650] },
-      { name: 'Napolitana', description: 'Muzzarella, rodajas de tomate y ajo', prices: [450, 590, 730] },
-      { name: 'Fugazzeta', description: 'Cebolla, muzzarella y orégano', prices: [470, 610, 760] },
-      { name: 'Especial', description: 'Muzzarella, jamón, morrones y aceitunas', prices: [500, 650, 810] },
-      { name: 'Calabresa', description: 'Muzzarella, longaniza calabresa y morrón', prices: [480, 630, 780] },
-      { name: 'Jamón y morrones', description: 'Muzzarella, jamón cocido y morrones asados', prices: [460, 600, 750] },
-      { name: 'Cuatro quesos', description: 'Muzzarella, dambo, parmesano y azul', prices: [520, 680, 840] },
-      { name: 'Rúcula y jamón crudo', description: 'Muzzarella, rúcula fresca, jamón crudo y parmesano', prices: [560, 730, 900] },
+      { name: 'Muzzarella', description: 'Salsa de tomate, muzzarella y aceitunas', prices: [420, 560, 700] },
+      { name: 'Napolitana', description: 'Muzzarella, rodajas de tomate y ajo', prices: [480, 630, 780] },
+      { name: 'Fugazzeta', description: 'Cebolla, muzzarella y orégano', prices: [500, 650, 810] },
+      { name: 'Jamón y morrones', description: 'Muzzarella, jamón cocido y morrones asados', prices: [500, 650, 810] },
+      { name: 'Calabresa', description: 'Muzzarella, longaniza calabresa y morrón', prices: [520, 680, 840] },
+      { name: 'Especial', description: 'Muzzarella, jamón, morrones, huevo y aceitunas', prices: [540, 700, 870] },
+      { name: 'Cuatro quesos', description: 'Muzzarella, dambo, parmesano y azul', prices: [560, 730, 900] },
+      { name: 'Rúcula y jamón crudo', description: 'Muzzarella, rúcula fresca, jamón crudo y parmesano', prices: [600, 780, 960] },
     ],
     sizes: PIZZA_SIZES,
     modifierGroups: ['Extras para pizza', 'Punto de cocción'],
   },
   {
-    category: 'Fainá y canastitas',
+    category: 'Fainá',
     products: [
-      { name: 'Fainá', description: 'A la piedra, bien fina', prices: [90, 260] },
-      { name: 'Fainá con muzzarella', description: 'La clásica "a caballo"', prices: [140, 390] },
+      { name: 'Fainá', description: 'A la piedra, bien fina', prices: [100, 280] },
+      { name: 'Fainá con muzzarella', description: 'La clásica "a caballo"', prices: [160, 420] },
     ],
     sizes: ['Porción', 'Entera'],
     modifierGroups: [],
   },
   {
-    category: 'Chivitos y minutas',
+    category: 'Lehmeyún',
     products: [
-      { name: 'Chivito canadiense', description: 'Lomo, panceta, jamón, queso, huevo y ensalada', prices: [590] },
-      { name: 'Chivito al plato', description: 'Con papas fritas y guarnición', prices: [690] },
-      { name: 'Chivito simple', description: 'Lomo, queso, jamón y lechuga', prices: [490] },
-      { name: 'Milanesa con papas fritas', description: null, prices: [480] },
-      { name: 'Milanesa napolitana con papas', description: 'Con jamón, queso y salsa', prices: [560] },
+      { name: 'Lehmeyún de carne', description: 'La clásica, con limón aparte', prices: [130, 720] },
+      { name: 'Lehmeyún con muzzarella', description: 'Carne y muzzarella', prices: [160, 880] },
+      { name: 'Lehmeyún de verdura', description: 'Espinaca y cebolla', prices: [130, 720] },
     ],
-    sizes: ['Porción'],
+    sizes: ['Unidad', 'Media docena'],
     modifierGroups: [],
   },
   {
-    category: 'Empanadas',
+    category: 'Sándwiches calientes',
     products: [
-      { name: 'Empanada de carne', description: 'Cortada a cuchillo', prices: [95, 980] },
-      { name: 'Empanada de jamón y queso', description: null, prices: [95, 980] },
-      { name: 'Empanada de pollo', description: null, prices: [95, 980] },
-      { name: 'Empanada de humita', description: 'Choclo cremoso', prices: [95, 980] },
-      { name: 'Empanada de verdura', description: 'Acelga y salsa blanca', prices: [95, 980] },
-      { name: 'Empanada de atún', description: null, prices: [95, 980] },
+      { name: 'Olímpico', description: 'Jamón, queso, lechuga, tomate, huevo y morrón', prices: [420] },
+      { name: 'Húngara', description: 'Húngara, queso y aderezos', prices: [340] },
+      { name: 'Chivito al pan', description: 'Lomo, panceta, jamón, queso, huevo y ensalada', prices: [620] },
+      { name: 'Milanesa al pan', description: 'Con lechuga, tomate y mayonesa', prices: [480] },
+      { name: 'Bondiola al pan', description: 'Con queso y morrones', prices: [520] },
     ],
-    sizes: ['Unidad', 'Docena'],
+    sizes: ['Único'],
     modifierGroups: [],
   },
   {
     category: 'Bebidas',
     products: [
-      { name: 'Coca-Cola 1,5L', description: null, prices: [180] },
-      { name: 'Coca-Cola 600ml', description: null, prices: [110] },
-      { name: 'Sprite 1,5L', description: null, prices: [175] },
-      { name: 'Agua mineral 600ml', description: null, prices: [85] },
-      { name: 'Cerveza Patricia 1L', description: null, prices: [220] },
-      { name: 'Cerveza Pilsen 960ml', description: null, prices: [210] },
-      { name: 'Vino Tannat', description: 'Botella 750ml', prices: [480] },
-    ],
-    sizes: ['Única'],
-    modifierGroups: [],
-  },
-  {
-    category: 'Postres',
-    products: [
-      { name: 'Chajá (porción)', description: 'Merengue, durazno y crema', prices: [230] },
-      { name: 'Flan con dulce de leche', description: null, prices: [190] },
-      { name: 'Helado (2 bochas)', description: 'Consultar sabores', prices: [210] },
+      { name: 'Coca-Cola 1,5L', description: null, prices: [190] },
+      { name: 'Coca-Cola 600ml', description: null, prices: [120] },
+      { name: 'Sprite 1,5L', description: null, prices: [185] },
+      { name: 'Agua mineral 600ml', description: null, prices: [90] },
+      { name: 'Cerveza Patricia 1L', description: null, prices: [240] },
+      { name: 'Cerveza Pilsen 960ml', description: null, prices: [230] },
     ],
     sizes: ['Única'],
     modifierGroups: [],
@@ -131,43 +150,70 @@ const MODIFIER_GROUPS = [
   },
 ];
 
-// Barrios de Montevideo, con tarifas plausibles según distancia al centro.
+/**
+ * Zonas de reparto.
+ *
+ * Los barrios son los que rodean a Brazo Oriental sobre el eje de Av. Burgues,
+ * ordenados por distancia al local. Las TARIFAS son una propuesta: hay que
+ * confirmarlas con el comercio, y sobre todo hasta dónde reparten de verdad
+ * (ver docs/09). Un barrio que no está en esta lista no recibe envío: el
+ * asistente lo dice en vez de prometerlo.
+ */
 const DELIVERY_ZONES = [
-  { name: 'Centro', feeCents: p(120), estimatedMin: 20 },
-  { name: 'Cordón', feeCents: p(120), estimatedMin: 20 },
-  { name: 'Parque Rodó', feeCents: p(130), estimatedMin: 25 },
-  { name: 'Pocitos', feeCents: p(150), estimatedMin: 30 },
-  { name: 'Punta Carretas', feeCents: p(150), estimatedMin: 30 },
-  { name: 'La Blanqueada', feeCents: p(160), estimatedMin: 35 },
-  { name: 'Buceo', feeCents: p(170), estimatedMin: 35 },
-  { name: 'Malvín', feeCents: p(200), estimatedMin: 40 },
+  { name: 'Brazo Oriental', feeCents: p(100), estimatedMin: 20 },
+  { name: 'Aires Puros', feeCents: p(110), estimatedMin: 25 },
+  { name: 'Atahualpa', feeCents: p(120), estimatedMin: 25 },
+  { name: 'Prado', feeCents: p(130), estimatedMin: 30 },
+  { name: 'Reducto', feeCents: p(130), estimatedMin: 30 },
+  { name: 'Cerrito de la Victoria', feeCents: p(150), estimatedMin: 35 },
+  { name: 'Sayago', feeCents: p(160), estimatedMin: 35 },
+  { name: 'Capurro', feeCents: p(170), estimatedMin: 40 },
 ];
 
 /**
- * Promociones de ejemplo.
+ * Promociones.
  *
- * Son texto, no reglas de descuento: es lo que el asistente le cuenta al
- * cliente y lo que el comercio puede editar solo desde el panel.
+ * Son texto, no reglas de descuento: es lo que el asistente le cuenta al cliente
+ * y lo que el comercio edita solo desde Configuración. Estas tres son ejemplos
+ * para la demostración; las reales las dicta el negocio.
  */
 const PROMOTIONS = [
   {
     title: 'Martes de muzza 2x1',
-    description: 'Todos los martes, llevás dos pizzas de muzzarella grandes al precio de una.',
+    description: 'Todos los martes, dos pizzas de muzzarella grandes al precio de una.',
     weekdays: [2],
   },
   {
-    title: 'Combo familiar',
-    description:
-      'Pizza grande + fainá entera + 2 litros de refresco. Pedilo por acá y te lo armamos.',
+    title: 'Combo Quijote',
+    description: 'Pizza grande + fainá entera + refresco de 1,5L. Pedilo por acá y te lo armamos.',
     weekdays: [],
   },
   {
-    title: 'Envío bonificado en Centro y Cordón',
-    description: 'De domingo a jueves, pedidos de más de $1.200 en Centro y Cordón van sin costo de envío.',
+    title: 'Envío sin costo en el barrio',
+    description: 'De domingo a jueves, pedidos de más de $1.200 en Brazo Oriental y Aires Puros van sin costo de envío.',
     weekdays: [0, 1, 2, 3, 4],
   },
 ];
 
+/**
+ * Texto que ve el cliente mientras el comercio no cargó sus datos de cobro.
+ *
+ * Es deliberadamente visible: si alguien se olvida de completarlo, el error
+ * salta en el primer pedido de prueba en vez de convertirse en una
+ * transferencia perdida.
+ */
+const PENDIENTE_DE_CARGA =
+  '⚠️ Faltan cargar los datos de cobro en el panel (Configuración → Métodos de pago).';
+
+/**
+ * Medios de pago.
+ *
+ * Los datos de cobro —alias, cuenta, QR— van vacíos A PROPÓSITO. Un alias
+ * equivocado no es un detalle cosmético: manda la plata de un cliente a la
+ * cuenta de otro. Se cargan desde el panel con los datos que dé el comercio, y
+ * hasta entonces el asistente avisa que los tiene que pedir en vez de inventar
+ * un número.
+ */
 const PAYMENT_METHODS = [
   {
     name: 'Efectivo',
@@ -186,8 +232,7 @@ const PAYMENT_METHODS = [
     requiresChangeFor: false,
     requiresPrepayment: true,
     allowedOrderTypes: undefined,
-    instructions:
-      'Transferí a:\nBROU · Caja de ahorro 001234567-00001\nTitular: La Napolitana SRL\nRUT: 21-999999-0018',
+    instructions: PENDIENTE_DE_CARGA,
     qrImageUrl: null,
   },
   {
@@ -196,7 +241,7 @@ const PAYMENT_METHODS = [
     requiresChangeFor: false,
     requiresPrepayment: true,
     allowedOrderTypes: undefined,
-    instructions: 'Escaneá el QR o pagá al alias: lanapolitana.mvd',
+    instructions: PENDIENTE_DE_CARGA,
     qrImageUrl: null,
   },
   {
@@ -219,15 +264,22 @@ const PAYMENT_METHODS = [
   },
 ];
 
+/**
+ * Clientes de demostración.
+ *
+ * Ficticios, con direcciones en las zonas de reparto reales para que el tablero
+ * y el historial se lean como un servicio de verdad. Los teléfonos no
+ * corresponden a nadie.
+ */
 const CUSTOMERS = [
-  { name: 'Martina Silva', phone: '099 123 456', street: 'Av. 18 de Julio', number: '1435', apartment: 'Apto 302', neighborhood: 'Centro', reference: 'Timbre 302, puerta de vidrio' },
-  { name: 'Diego Techera', phone: '094 567 890', street: 'Bulevar España', number: '2140', neighborhood: 'Pocitos', reference: 'Casa con reja verde' },
-  { name: 'Lucía Bentancur', phone: '091 234 567', street: 'Ellauri', number: '780', apartment: 'Apto 1A', neighborhood: 'Punta Carretas' },
-  { name: 'Javier Sosa', phone: '098 765 432', street: '8 de Octubre', number: '3120', neighborhood: 'La Blanqueada', reference: 'Al lado del kiosco' },
-  { name: 'Carolina Olivera', phone: '095 331 447', street: 'Rivera', number: '2890', apartment: 'Apto 7C', neighborhood: 'Buceo' },
-  { name: 'Nicolás Pereyra', phone: '092 884 210', street: 'Colonia', number: '1560', neighborhood: 'Cordón' },
-  { name: 'Florencia Cabrera', phone: '096 118 903', street: 'Av. Brasil', number: '2745', neighborhood: 'Pocitos', reference: 'Edificio azul, 2do piso' },
-  { name: 'Sebastián Methol', phone: '099 776 331', street: 'Michigan', number: '1420', neighborhood: 'Malvín' },
+  { name: 'Martina Silva', phone: '099 123 456', street: 'Av. Burgues', number: '3140', apartment: 'Apto 2', neighborhood: 'Brazo Oriental', reference: 'Timbre 2, puerta gris' },
+  { name: 'Diego Techera', phone: '094 567 890', street: 'Bvar. Aparicio Saravia', number: '2870', neighborhood: 'Aires Puros', reference: 'Casa con reja verde' },
+  { name: 'Lucía Bentancur', phone: '091 234 567', street: 'Av. Millán', number: '3920', apartment: 'Apto 1A', neighborhood: 'Prado' },
+  { name: 'Javier Sosa', phone: '098 765 432', street: 'Domingo Aramburú', number: '1450', neighborhood: 'Reducto', reference: 'Al lado del kiosco' },
+  { name: 'Carolina Olivera', phone: '095 331 447', street: 'Av. Garzón', number: '1180', apartment: 'Apto 7C', neighborhood: 'Sayago' },
+  { name: 'Nicolás Pereyra', phone: '092 884 210', street: 'Bvar. Batlle y Ordóñez', number: '3660', neighborhood: 'Atahualpa' },
+  { name: 'Florencia Cabrera', phone: '096 118 903', street: 'Av. José Belloni', number: '2410', neighborhood: 'Cerrito de la Victoria', reference: 'Edificio azul, 2do piso' },
+  { name: 'Sebastián Methol', phone: '099 776 331', street: 'Capurro', number: '840', neighborhood: 'Capurro' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -267,8 +319,8 @@ function pickWeighted<T>(entries: readonly (readonly [T, number])[]): T {
 }
 
 async function main(): Promise<void> {
-  const email = process.env.SEED_OWNER_EMAIL ?? 'admin@pizzeria.local';
-  const password = process.env.SEED_OWNER_PASSWORD ?? 'demo-pizzeria-2026';
+  const email = process.env.SEED_OWNER_EMAIL ?? 'admin@nuevoquijote.local';
+  const password = process.env.SEED_OWNER_PASSWORD ?? 'demo-quijote-2026';
 
   if (isProduction && !process.env.SEED_OWNER_PASSWORD) {
     throw new Error('En producción hay que definir SEED_OWNER_PASSWORD explícitamente.');
@@ -280,18 +332,21 @@ async function main(): Promise<void> {
   const commerce = await prisma.commerce.upsert({
     where: { slug: SLUG },
     update: {
+      name: COMMERCE.name,
       timezone: TIMEZONE,
       currency: 'UYU',
       country: COUNTRY,
       businessDayCutoff: CUTOFF,
-      phone: '+59827123456',
-      address: 'Av. 18 de Julio 1580, Montevideo',
+      openingHours: COMMERCE.openingHours,
+      phone: COMMERCE.phone,
+      address: COMMERCE.address,
     },
     create: {
-      name: 'La Napolitana',
+      name: COMMERCE.name,
       slug: SLUG,
-      phone: '+59827123456',
-      address: 'Av. 18 de Julio 1580, Montevideo',
+      phone: COMMERCE.phone,
+      address: COMMERCE.address,
+      openingHours: COMMERCE.openingHours,
       timezone: TIMEZONE,
       currency: 'UYU',
       country: COUNTRY,
@@ -316,8 +371,8 @@ async function main(): Promise<void> {
 
   const team = [
     { email, name: 'Dueño', role: 'OWNER' as const, password },
-    { email: 'encargado@pizzeria.local', name: 'Encargada', role: 'MANAGER' as const, password: 'demo-pizzeria-2026' },
-    { email: 'mostrador@pizzeria.local', name: 'Mostrador', role: 'STAFF' as const, password: 'demo-pizzeria-2026' },
+    { email: 'encargado@nuevoquijote.local', name: 'Encargada', role: 'MANAGER' as const, password: 'demo-quijote-2026' },
+    { email: 'mostrador@nuevoquijote.local', name: 'Mostrador', role: 'STAFF' as const, password: 'demo-quijote-2026' },
   ];
 
   for (const member of team) {
@@ -752,22 +807,22 @@ async function main(): Promise<void> {
       ['CUSTOMER', 'Hola! tenés muzza grande?'],
       [
         'ASSISTANT',
-        '¡Hola! 👋 Sí, tenemos. La muzzarella grande (8 porciones) está $650.\n\n¿Te la armo? Decime si es para envío o para retirar.',
+        '¡Hola! 👋 Sí, tenemos. La muzzarella grande (8 porciones) está $700.\n\n¿Te la armo? Decime si es para envío o para retirar.',
       ],
       ['CUSTOMER', 'dale, una grande para retirar'],
       [
         'ASSISTANT',
-        'Te va quedando así:\n• 1x Muzzarella (Grande (8 porciones)) — $650\n*Total: $650*\n\n¿Cómo lo vas a pagar?',
+        'Te va quedando así:\n• 1x Muzzarella (Grande (8 porciones)) — $700\n*Total: $700*\n\n¿Cómo lo vas a pagar?',
       ],
       ['CUSTOMER', 'transferencia'],
       [
         'ASSISTANT',
-        'Te va quedando así:\n• 1x Muzzarella (Grande (8 porciones)) — $650\n*Total: $650*\n\n¿Confirmo el pedido?',
+        'Te va quedando así:\n• 1x Muzzarella (Grande (8 porciones)) — $700\n*Total: $700*\n\n¿Confirmo el pedido?',
       ],
       ['CUSTOMER', 'si'],
       [
         'ASSISTANT',
-        '¡Listo! Tu pedido es el *#42* por $650.\n\nPara ponerlo en marcha necesitamos el pago por adelantado.\n\nTransferí a:\nBROU · Caja de ahorro 001234567-00001\nTitular: La Napolitana SRL\n\nCuando pagues, mandame la captura del comprobante por acá y lo mandamos a la cocina 👍',
+        `¡Listo! Tu pedido es el *#42* por $700.\n\nPara ponerlo en marcha necesitamos el pago por adelantado.\n\n${PENDIENTE_DE_CARGA}\n\nCuando pagues, mandame la captura del comprobante por acá y lo mandamos a la cocina 👍`,
       ],
     ],
   });
@@ -818,6 +873,13 @@ async function main(): Promise<void> {
   console.log(`Menú: ${allVariants.length} variantes en ${MENU.length} categorías`);
   console.log(`Clientes: ${customers.length} · Pedidos: ${totalOrders}`);
   console.log(`Acceso: ${email} / ${password}`);
+  console.log('');
+  console.log('ANTES DE MOSTRARLO, completar con los datos del comercio:');
+  console.log('  1. Precios de la carta            → panel · Menú');
+  console.log('  2. Alias / cuenta y QR de cobro   → panel · Configuración');
+  console.log('  3. Zonas de reparto y sus costos  → panel · Configuración');
+  console.log('  4. Teléfono y dirección exacta    → panel · Configuración');
+  console.log('  La lista completa está en docs/09-nuevo-quijote.md');
 }
 
 /** Deja un hilo de WhatsApp ya conversado, para poder mostrarlo sin escribirlo. */

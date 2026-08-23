@@ -41,6 +41,7 @@ const commerceSelect = {
   timezone: true,
   currency: true,
   businessDayCutoff: true,
+  openingHours: true,
   isActive: true,
 } as const;
 
@@ -52,6 +53,7 @@ function toCommerceSettings(commerce: {
   timezone: string;
   currency: string;
   businessDayCutoff: string;
+  openingHours: string | null;
 }): CommerceSettings {
   return {
     id: commerce.id,
@@ -61,6 +63,7 @@ function toCommerceSettings(commerce: {
     timezone: commerce.timezone,
     currency: commerce.currency,
     businessDayCutoff: commerce.businessDayCutoff,
+    openingHours: commerce.openingHours,
   };
 }
 

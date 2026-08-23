@@ -23,6 +23,7 @@ export interface CommerceSettings {
   timezone: string;
   currency: string;
   businessDayCutoff: string;
+  openingHours: string | null;
 }
 
 export type Actor =
