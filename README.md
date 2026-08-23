@@ -112,12 +112,16 @@ pnpm db:up              # levanta MySQL con docker compose
 pnpm db:setup           # genera el cliente, migra y carga los datos de demo
 ```
 
-Después, en dos terminales:
+Después:
 
 ```bash
-pnpm dev        # API en http://localhost:3000
-pnpm dev:web    # panel en http://localhost:5173
+pnpm dev        # levanta la API y el panel juntos
 ```
+
+**El panel se abre en http://localhost:5173.** Ese es el que se muestra; el 3000 es la API, que
+devuelve JSON y no tiene pantallas.
+
+Si preferís tenerlos en terminales separadas: `pnpm dev:api` y `pnpm dev:web`.
 
 `db:setup` carga el menú, las zonas, los clientes y dos semanas de historial, e imprime en consola el
 usuario y la contraseña de acceso más la lista de datos que faltan completar. Se puede volver a

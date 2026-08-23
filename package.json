@@ -7,7 +7,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm --filter @autoelite/api dev",
+    "dev": "pnpm --parallel --filter @autoelite/api --filter @autoelite/web dev",
+    "dev:api": "pnpm --filter @autoelite/api dev",
     "dev:web": "pnpm --filter @autoelite/web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",

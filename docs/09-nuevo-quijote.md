@@ -128,8 +128,10 @@ Ordenado por lo que más traba si falta.
 ```bash
 pnpm db:up        # levanta la base
 pnpm db:setup     # migra y carga los datos de Nuevo Quijote
-pnpm dev          # panel en http://localhost:5173
+pnpm dev          # levanta la API y el panel
 ```
+
+Abrí **http://localhost:5173** — ese es el panel. El 3000 es la API y no tiene pantallas.
 
 Entrás con **admin@nuevoquijote.local** / **demo-quijote-2026**.
 
