@@ -136,6 +136,17 @@ DATABASE_URL="mysql://root:root@localhost:3307/autoelite"
 Después `docker compose down && pnpm db:up`. Para ver qué lo está ocupando:
 `lsof -nP -i:3306 | grep LISTEN`.
 
+**`container name is already in use`** — quedó dando vueltas el contenedor de una copia anterior del
+proyecto, típicamente porque renombraste la carpeta. Se borra y se vuelve a levantar:
+
+```bash
+docker rm -f autoelite-mysql   # o el nombre que diga el error
+pnpm db:up
+pnpm db:setup
+```
+
+No se pierde nada: los datos de la base los regenera `db:setup` en segundos.
+
 **`Can't reach database server`** — el contenedor todavía está arrancando. MySQL tarda unos segundos
 la primera vez; reintentá `pnpm db:setup`.
 

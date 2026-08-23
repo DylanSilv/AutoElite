@@ -1,7 +1,13 @@
+# Base de datos para desarrollo local.
+#
+# Sin `container_name` a propósito: con un nombre fijo, renombrar la carpeta del
+# proyecto hace que Compose intente crear un contenedor nuevo con el nombre que
+# ya está usando el anterior, y falla con "container name is already in use".
+# Dejando que lo nombre Compose, cada carpeta tiene el suyo y conviven sin
+# pisarse.
 services:
   mysql:
     image: mysql:8.4
-    container_name: autoelite-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
